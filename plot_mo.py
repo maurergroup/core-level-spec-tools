@@ -67,26 +67,50 @@ mix1 = 0.2
 mix2 = 0.8
 ########################################
 
-#File Names
-MO = ['37','38','39','40','41','42','43'] #List of MO numbers
+pol_method = '1'
+MO = list(map(str, range(17,29))) #List of MO numbers you want 17-29 gives 17, 18 ,19... 28
 angle = ['t25','t53','t90'] #incidence angles
-molecule = 'benzene'
-metal = 'Cu'
-filename = '/'+molecule+'_'+metal+'_4_1_1_1_deltas.dat'
+molecule = 'azulene'
+metal = 'Ag'
+atom = 'C'
+numbers = list(range(48,58)
+
+################################################
+#Create list of all directories invovled name C48, C49... C57
+folders = []
+for n in numbers:
+    folders.append(atom+str(n)+'/')
+
+#Create string of filename 
+filename = '/'+molecule+'_'+metal+'4_1_1_1_deltas.dat'
+
+#Get the number of kpoints used in calculation in order to correct the MO projected state
+kpts = []
+with open(atom+str(numbers[0])+'/'+molecule+'_'+metal+'.bands', 'r') as bands:
+    for line in bands:
+        if 'Number of k-points' in line:
+            for word in line.split():
+                try:
+                    kpts.append(float(word))
+                except ValueError:
+                    pass
+
+###############################################
 
 
-peaks = np.zeros([6,38048]) #Empty array of No.of carbons, No. of states
-I = np.zeros([6,38048])
+peaks = np.zeros([10,23040]) #Empty array of No.of carbons, No. of states
+I = np.zeros([10,23040])
 
 for m in MO:
         
     for a in angle:
-        for i,direc in enumerate(['C1/','C2/','C3/','C4/','C5/','C6/']):
+        for i,direc in enumerate([folders):
             
             data = np.loadtxt(direc+a+filename)
-            x, y = data[:,0], data[:,3]
+            x, y = data[:,0], data[:,pol_method]
             
-            data2 = np.loadtxt(direc+a+'/'+molecule+'_'+m+'_spin1_deltas.dat')
+            data2 = np.loadtxt(direc+a+'/'+molecule+'_'+metal+'_'+m+'_spin1_deltas.dat')
+            data2*= kpts
             peaks[i,:] = x
             I[i,:] = y*data2[:,1]
         
