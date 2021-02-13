@@ -67,13 +67,13 @@ mix1 = 0.2
 mix2 = 0.8
 ########################################
 
-pol_method = '1'
+pol_method = 4
 MO = list(map(str, range(17,29))) #List of MO numbers you want 17-29 gives 17, 18 ,19... 28
 angle = ['t25','t53','t90'] #incidence angles
 molecule = 'azulene'
 metal = 'Ag'
 atom = 'C'
-numbers = list(range(48,58)
+numbers = list(range(48,58))
 
 ################################################
 #Create list of all directories invovled name C48, C49... C57
@@ -82,7 +82,7 @@ for n in numbers:
     folders.append(atom+str(n)+'/')
 
 #Create string of filename 
-filename = '/'+molecule+'_'+metal+'4_1_1_1_deltas.dat'
+filename = '/'+molecule+'_'+metal+'_4_1_1_1_deltas.dat'
 
 #Get the number of kpoints used in calculation in order to correct the MO projected state
 kpts = []
@@ -104,7 +104,7 @@ I = np.zeros([10,23040])
 for m in MO:
         
     for a in angle:
-        for i,direc in enumerate([folders):
+        for i,direc in enumerate(folders):
             
             data = np.loadtxt(direc+a+filename)
             x, y = data[:,0], data[:,pol_method]
