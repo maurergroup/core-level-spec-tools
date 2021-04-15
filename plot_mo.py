@@ -54,8 +54,8 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
         data[i]= np.sum(pseudovoigt_vec)
     return x_axis, data
 
-######################################
-#Broadening Parameters
+######BROADENING PARAMETERS################################
+
 xstart = 285.
 xstop = 310.
 broad1 = 0.75
@@ -65,28 +65,31 @@ ewid1 = firstpeak+5.0
 ewid2 = firstpeak+15.0
 mix1 = 0.2
 mix2 = 0.8
-########################################
 
-pol_method = 4
+######SYSTEM_PARAMTERS######################################
+
+pol_method = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
 MO = list(map(str, range(17,29))) #List of MO numbers you want 17-29 gives 17, 18 ,19... 28
-angle = ['t25','t53','t90'] #incidence angles
-molecule = 'azulene'
-metal = 'Ag'
-atom = 'C'
-numbers = list(range(48,58))
+angle = ['t25','t53','t90'] #Incidence angles
+molecule = 'azulene' #Name of molecule
+metal = 'Ag' #Surface in system
+elem = 'C'
+numbers = list(range(48,58)) #Set range to correspond to the directories C48, C49... C57
+atom = '4' #The number of the exicted atom in the list of elements in the system, always the last, if system contains H, C, Ag, C:exc, it will be 4
 
-################################################
-#Create list of all directories invovled name C48, C49... C57
+######SETUP ALL LIST AND VARIABLES#############################
+
+#Create list of all the folders all the data is in C48/, C49/... C57/
 folders = []
 for n in numbers:
-    folders.append(atom+str(n)+'/')
+    folders.append(elem+str(n)+'/')
 
-#Create string of filename 
-filename = '/'+molecule+'_'+metal+'_4_1_1_1_deltas.dat'
+#Create variable with a string og the delta file which will be read
+filename = '/'+molecule+'_'+metal+'_'+atom+'_1_1_1_deltas.dat'
 
 #Get the number of kpoints used in calculation in order to correct the MO projected state
 kpts = []
-with open(atom+str(numbers[0])+'/'+molecule+'_'+metal+'.bands', 'r') as bands:
+with open(elem+str(numbers[0])+'/'+molecule+'_'+metal+'.bands', 'r') as bands:
     for line in bands:
         if 'Number of k-points' in line:
             for word in line.split():
@@ -95,37 +98,68 @@ with open(atom+str(numbers[0])+'/'+molecule+'_'+metal+'.bands', 'r') as bands:
                 except ValueError:
                     pass
 
+#Get the length of the deltas file
+bands = np.loadtxt(elem+str(numbers[0])+'/'+angle[0]+'/'+filename)
+bands_num = len(bands)
+
+#Read .param file to see if calculation is spin_polarised and set up required settings
+with open (elem+str(numbers[0])+'/'+molecule+'_'+metal+'.param') as param:
+    if 'SPIN_POLARIZED: TRUE' in param.read():
+        spin = True
+        spin_val = list(map(str,range(1,3)))
+        spin_num - bands_num/2
+    else:
+        spin = False
+        spin_val = list(map(str, range(1,2)))
+        spin_num = bands_num
+
+#Create arrays with sized of the system to use
+peaks = np.zeros([len(numbers),int(spin_num)])
+I = np.zeros([len(numbers), int(spin_num)])
+
+
 ###############################################
 
+for s in spin_val:
+    for m in MO:
+        for a in angle:
+            for i,direc in enumerate(folders):
+            
+                data = np.loadtxt(direc+a+filename)
+                x, y = data[:,0], data[:,pol_method]
 
-peaks = np.zeros([10,23040]) #Empty array of No.of carbons, No. of states
-I = np.zeros([10,23040])
+                if spin == True:
+                    x1, y1 = x[:int(spin_num)], y[:int(spin_num)]
+                    x2, y2 = x[int(spin_num):], y[int(spin_num):]
+                    spindict = {
+                            'spin1x' : x1,
+                            'spin2y' : y1,
+                            'spin2x' : x2,
+                            'spin2y' : y2
+                            }
+                else:
+                    spindict = {
+                            'spin1x' : x,
+                            'spin1y' : y,
+                            }
 
-for m in MO:
+                data2 = np.loadtxt(direc+a+'/'+molecule+'_'+metal+'_'+m+'_spin'+s+'_deltas.dat')
+                data2*= kpts
+                peaks[i,:] = spindict['spin'+s+'x']
+                I[i,:] = spindict['spin'+s+'y']*data2[:,1]
         
-    for a in angle:
-        for i,direc in enumerate(folders):
+            fileout = open(molecule+'_'+metal+'_MO'+m+'_deltas_'+a+'_spin'+s+'.txt','w')
+            fileout.write('#   <x in eV>     Intensity\n')
+            for p,i in zip(peaks.flatten(), I.flatten()):
+                fileout.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
+            fileout.close()
             
-            data = np.loadtxt(direc+a+filename)
-            x, y = data[:,0], data[:,pol_method]
-            
-            data2 = np.loadtxt(direc+a+'/'+molecule+'_'+metal+'_'+m+'_spin1_deltas.dat')
-            data2*= kpts
-            peaks[i,:] = x
-            I[i,:] = y*data2[:,1]
+            x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
+                    coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
         
-        fileout = open(molecule+'_'+metal+'_MO'+m+'_deltas_'+a+'.txt','w')
-        fileout.write('#   <x in eV>     Intensity\n')
-        for p,i in zip(peaks.flatten(), I.flatten()):
-            fileout.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
-        fileout.close()
-            
-        x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
-                coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-        
-        datafile = open(molecule+'_'+metal+'_MO'+m+'_'+a+'.txt', 'w')
-        for (xi, yi) in zip(x,y):
-            asd = str(xi) + ' ' + str(yi) + '\n'
-            datafile.write(asd)
-        datafile.close()
+            datafile = open(molecule+'_'+metal+'_MO'+m+'_'+a+'spin'+s+'.txt', 'w')
+            for (xi, yi) in zip(x,y):
+                asd = str(xi) + ' ' + str(yi) + '\n'
+                datafile.write(asd)
+            datafile.close()
 

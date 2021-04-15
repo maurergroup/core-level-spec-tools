@@ -54,35 +54,47 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
         data[i]= np.sum(pseudovoigt_vec)
     return x_axis, data
 
-#########################################
-xstart = 275.
-xstop = 330.
-broad1 = 0.75
+######BROADENING PARAMETERS###################################
+
+xstart = 275. #Start Value
+xstop = 330. #End Value
+broad1 = 0.75 
 broad2 = 2.0
 firstpeak = 290.0 
 ewid1 = firstpeak+5.0
 ewid2 = firstpeak+15.0
-mix1 = 0.2
-mix2 = 0.8
-########################################
+mix1 = 0.2 #First G/L mix raitio
+mix2 = 0.8 #Last G/L mix ratio
+
+######SYSTEM PARAMETERS########################################
 
 pol_method = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
 angle = ['t25','t53','t90'] #Incidence angles
 molecule = 'azulene' #Name of molecule
 metal = 'Ag' #Surface in system
-atom = 'C' 
+elem = 'C' 
 numbers = list(range(48,58)) #Set range to correspoding to the directories C48, C49... C57
+atom = '4' #The number of the excited atom in the list of elements in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
 
-########################################
+######SETUP ALL LIST AND VARIABLES NEEDED#######################
 
+#Set up a list of all the folders all the data is in C48/, C49/... C57/
 folders = []
 for n in numbers:
-    folders.append(atom+str(n)+'/')
+    folders.append(elem+str(n)+'/')
 
-filename = '/'+molecule+'_'+metal+'_4_1_1_1_deltas.dat' #Set first number to number of atom species in system, should always be the last number
+#Create variable with a string for the delta file which will be read
+filename = '/'+molecule+'_'+metal+'_'+atom+'_1_1_1_deltas.dat'
 
-peaks = np.zeros([10,23040]) #Set to number of atoms involved and the length of the datafiles
-I = np.zeros([10,23040])
+#Get the length of the deltas file
+bands = np.loadtxt(elem+str(numbers[0])+'/'+angle[0]+'/'+filename)
+bands_num = len(bands)
+
+#Create arrays with sizes of the system to use
+peaks = np.zeros([len(numbers),bands_num])
+I = np.zeros([len(numbers),bands_num])
+
+#####################################################
 
 for a in angle:
     for i,direc in enumerate(folders):
@@ -114,12 +126,12 @@ xs = []
 ys = []
 
 for z in range(10):
-    x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, xstop=xstop,
+    x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
             coeffs = I[z,:], broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
     xs.append(x_tmp)
     ys.append(y_tmp)
 
-    txtfile = open(molecule+'_'+metal+'_'+atom+str(z)+'.txt', 'w')
+    txtfile = open(molecule+'_'+metal+'_'+elem+str(z)+'.txt', 'w')
     for (xsz, ysz) in zip(x_tmp, y_tmp):
         txt = str(xsz) + ' ' + str(ysz) + '\n'
         txtfile.write(txt)
