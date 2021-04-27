@@ -56,15 +56,15 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
 
 ######BROADENING PARAMETERS################################
 
-xstart = 285.
-xstop = 310.
-broad1 = 0.75
-broad2 = 2.0
+xstart = 285. #Start Value
+xstop = 310. #End Value
+broad1 = 0.75 #Broadening value for first section
+broad2 = 2.0 #Broadening value for last section
 firstpeak = 290.0 
-ewid1 = firstpeak+5.0
+ewid1 = firstpeak+5.0 #Set range to linearly move from braod1 to broad2
 ewid2 = firstpeak+15.0
-mix1 = 0.2
-mix2 = 0.8
+mix1 = 0.2 #First G/L mix ratio
+mix2 = 0.8 #Last G/L mix ratio
 
 ######SYSTEM_PARAMTERS######################################
 
@@ -119,15 +119,15 @@ I = np.zeros([len(numbers), int(spin_num)])
 
 
 ###############################################
-
+#Loop over spin, MOs and angles in the indivdual directories
 for s in spin_val:
     for m in MO:
         for a in angle:
             for i,direc in enumerate(folders):
-            
+#Load the data from the MolPDOS calculation
                 data = np.loadtxt(direc+a+filename)
                 x, y = data[:,0], data[:,pol_method]
-
+#If spin polarized is on then split the data in half for each spin, x1, y1 and x2, y2
                 if spin == True:
                     x1, y1 = x[:int(spin_num)], y[:int(spin_num)]
                     x2, y2 = x[int(spin_num):], y[int(spin_num):]
@@ -137,26 +137,28 @@ for s in spin_val:
                             'spin2x' : x2,
                             'spin2y' : y2
                             }
+#If not spin polarized load all data as x, y
                 else:
                     spindict = {
                             'spin1x' : x,
                             'spin1y' : y,
                             }
-
+#Load the indivdual MO data from the MolPDOS calculation and add the k-point scaling and add
+#multiply the intesity of the MO with the overall spectrum
                 data2 = np.loadtxt(direc+a+'/'+molecule+'_'+metal+'_'+m+'_spin'+s+'_deltas.dat')
                 data2*= kpts
                 peaks[i,:] = spindict['spin'+s+'x']
                 I[i,:] = spindict['spin'+s+'y']*data2[:,1]
-        
+#Write out all of the MO data into a delta file
             fileout = open(molecule+'_'+metal+'_MO'+m+'_deltas_'+a+'_spin'+s+'.txt','w')
             fileout.write('#   <x in eV>     Intensity\n')
             for p,i in zip(peaks.flatten(), I.flatten()):
                 fileout.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
             fileout.close()
-            
+#Apply the broadening
             x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
                     coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-        
+#Write out MO peak into a text file
             datafile = open(molecule+'_'+metal+'_MO'+m+'_'+a+'spin'+s+'.txt', 'w')
             for (xi, yi) in zip(x,y):
                 asd = str(xi) + ' ' + str(yi) + '\n'

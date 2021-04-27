@@ -58,10 +58,10 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
 
 xstart = 275. #Start Value
 xstop = 330. #End Value
-broad1 = 0.75 
-broad2 = 2.0
+broad1 = 0.75 #Broadening value for first section 
+broad2 = 2.0 #Broadening value for last section
 firstpeak = 290.0 
-ewid1 = firstpeak+5.0
+ewid1 = firstpeak+5.0 #Set the range to linearly move from broad1 to broad2 
 ewid2 = firstpeak+15.0
 mix1 = 0.2 #First G/L mix raitio
 mix2 = 0.8 #Last G/L mix ratio
@@ -94,25 +94,25 @@ bands_num = len(bands)
 peaks = np.zeros([len(numbers),bands_num])
 I = np.zeros([len(numbers),bands_num])
 
-#####################################################
-
+###########################################################
+#Loop over all the angles and the individual directories
 for a in angle:
     for i,direc in enumerate(folders):
-
+#Load the data from the MolPDOS calculation  
         data = np.loadtxt(direc+a+filename)
         x, y = data[:,0], data[:,pol_method]
         peaks[i,:] = x
         I[i,:] = y
-
+#Write out all of the data for all atoms into a delta peaks file
     fileout = open(molecule+'_'+metal+'_deltas_'+a+'.txt','w')
     fileout.write('#   <x in eV>     Intensity\n')
     for p,i in zip(peaks.flatten(), I.flatten()):
         fileout.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
     fileout.close()
-
+#Apply the broadening to the data
     x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
         coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-
+#Write out spectrum into a text file
     datafile = open(molecule+'_'+metal+'_spectrum_'+a+'.txt', 'w')
     for (xi, yi) in zip(x,y):
         asd = str(xi) + ' ' + str(yi) + '\n'
