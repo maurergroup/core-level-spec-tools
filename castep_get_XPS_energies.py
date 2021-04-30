@@ -76,7 +76,7 @@ print(delta_Eval)
 delta_Ecore = delta_Eall - delta_Eval
 print(delta_Ecore)
 
-F_enrgy = 'Final Energy'
+F_enrgy = 'Final energy'
 
 #Open ground state .castep file and get the total final energy
 with open('../'+filename, 'r') as core:
