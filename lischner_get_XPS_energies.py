@@ -14,7 +14,6 @@ energy = 's.c.f. calculation      :'
 
 element = 'C'
 atoms = list(range(1,11))
-atoms = ['1','2','4','5','6','7','8','9','10']
 grenrgys = []
 excienrgys = []
 
