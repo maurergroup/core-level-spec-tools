@@ -66,21 +66,25 @@ mix1 = 0.3
 mix2 = 0.3
 ########################################
 
+#Set what element you have calculated XPS for
 element = 'C'
-
+#Read in the XPS peaks in generated with python script
 data = np.loadtxt(element+'_XPS_peaks.txt')
 print(data)
 
+#Apply the broadening
 x, y = dos_binning(data, broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
                 coeffs = None, broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
 
+#Write out the spectrum to a text file
 fileout = open(element+'_XPS_spectrum.txt', 'w')
 for (xi, yi) in zip(x,y):
     dat = str(xi) + ' ' + str(yi) + '\n'
     fileout.write(dat)
 fileout.close()
 
-#assert 0
+#To get the indivdual atom peaks uncomment the assert 0
+assert 0
 
 xs = []
 ys = []
@@ -98,4 +102,3 @@ for z in range(10):
         txt = str(xsz) + ' ' + str(ysz) + '\n'
         txtfile.write(txt)
     txtfile.close()
-    
