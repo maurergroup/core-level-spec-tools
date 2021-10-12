@@ -16,7 +16,7 @@ def get_energy_level(line):
 #Set the element, the numbers of the XPS directories and the seedname of
 #the castep calculations
 element = 'C'
-atoms = list(range(48,58))
+atoms = list(range(0,10))
 filename = 'azulene_Ag.castep'
 
 #######################################################################
@@ -49,41 +49,41 @@ outx.close()
 for line in atoC:
     if 'of' in line:
         aC_enrgy = get_energy_level(line)
-print(aC_enrgy)
+print('Atomic '+element+' energy:', aC_enrgy)
 
 for line in atoCx:
     if 'of' in line:
         aCx_enrgy = get_energy_level(line)
-print(aCx_enrgy)
+print('Atomic '+element+':exc energy:', aCx_enrgy)
 
 for line in pseC:
     if 'of' in line:
         pC_enrgy = get_energy_level(line)
-print(pC_enrgy)
+print('Pseudo '+element+' energy:', pC_enrgy)
 
 for line in pseCx:
     if 'of' in line:
         pCx_enrgy = get_energy_level(line)
-print(pCx_enrgy)
+print('Pseudo '+element+':exc', pCx_enrgy)
 
 #Get the difference between the atomic energies of the element (DeltaE_all orbitals(atom) in paper
 #and the pseudoatomic energies (DeltaE_valence(atom) in paper
 #Then the correction term DeltaE_core(atom)
-delta_Eall = aCx_enrgy - aC_enrgy
-print(delta_Eall)
-delta_Eval = pCx_enrgy - pC_enrgy
-print(delta_Eval)
-delta_Ecore = delta_Eall - delta_Eval
-print(delta_Ecore)
+D_Eall_orb = aCx_enrgy - aC_enrgy
+print('Delta E_all_orb:', D_Eall_orb)
+D_Eval_at = pCx_enrgy - pC_enrgy
+print('Delta E_val:', D_Eval_at)
+D_Ecore_at = D_Eall_orb - D_Eval_at
+print('Delta E_core_at:', D_Ecore_at)
 
 F_enrgy = 'Final energy'
 
 #Open ground state .castep file and get the total final energy
-with open('../'+filename, 'r') as core:
-    for line in core:
+with open('../'+filename, 'r') as ground:
+    for line in ground:
         if F_enrgy in line:
-            core_enrgy = get_energy_level(line)
-print(core_enrgy)
+            ground_enrgy = get_energy_level(line)
+print('Ground-state energy:', ground_enrgy)
 
 #Get all of the individual final excited state energies for all atoms
 energies = []
@@ -95,10 +95,10 @@ for i in atoms:
              
 #Calculate the energy difference between ground state and excired states
 #then apply the pseudopotential correction term
-delta_Ev = [x - core_enrgy for x in energies]
-XPS = [x + delta_Ecore for x in delta_Ev]
+D_Eval = [x - ground_enrgy for x in energies]
+E_BE = [x + D_Ecore_at for x in D_Eval]
 
 #Print out energies into file
 with open(element+'_XPS_peaks.txt', 'w') as f:
-    for item in XPS:
+    for item in E_BE:
         f.write('%s\n' % item)
