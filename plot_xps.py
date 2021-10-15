@@ -91,13 +91,13 @@ ys = []
 
 for z in range(10):
     peak = []
-    peak.appened(data[z])
+    peak.append(data[z])
     x_tmp, y_tmp = dos_binning(peak, broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
                 coeffs = None, broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
     xs.append(x_tmp)
-    ys.append=(y_tmp)
+    ys.append(y_tmp)
 
-    txtfile = open(element+'_XPS_spectrum_'+element+str(z)+'.txt')
+    txtfile = open(element+'_XPS_spectrum_'+element+str(z)+'.txt','w')
     for (xsz, ysz) in zip(x_tmp, y_tmp):
         txt = str(xsz) + ' ' + str(ysz) + '\n'
         txtfile.write(txt)
