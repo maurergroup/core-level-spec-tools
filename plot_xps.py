@@ -83,13 +83,13 @@ for (xi, yi) in zip(x,y):
     fileout.write(dat)
 fileout.close()
 
-#To get the indivdual atom peaks uncomment the assert 0
-assert 0
+#To get the indivdual atom peaks uncomment the quit() command
+quit()
 
 xs = []
 ys = []
 
-for z in range(10):
+for z in range(len(data)):
     peak = []
     peak.append(data[z])
     x_tmp, y_tmp = dos_binning(peak, broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,

@@ -68,12 +68,14 @@ mix2 = 0.8 #Last G/L mix ratio
 
 ######SYSTEM PARAMETERS########################################
 
-pol_method = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
+n_type = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
 angle = ['t25','t53','t90'] #Incidence angles
 molecule = 'azulene' #Name of molecule
 metal = 'Ag' #Surface in system
 elem = 'C' 
-numbers = list(range(48,58)) #Set range to correspoding to the directories C48, C49... C57
+num_start = 48 # Set the num_start and num_end to values corresponding the the first and last numbers of your directories C48, C49... C57
+num_end = 57
+numbers = list(range(num_start,num_end)) #Creates a range of numbers corresponding to the directorie numbers
 atom = '4' #The number of the excited atom in the list of elements in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
 
 ######SETUP ALL LIST AND VARIABLES NEEDED#######################
@@ -100,7 +102,7 @@ for a in angle:
     for i,direc in enumerate(folders):
 #Load the data from the MolPDOS calculation  
         data = np.loadtxt(direc+a+filename)
-        x, y = data[:,0], data[:,pol_method]
+        x, y = data[:,0], data[:,n_type]
         peaks[i,:] = x
         I[i,:] = y
 #Write out all of the data for all atoms into a delta peaks file
@@ -119,13 +121,14 @@ for a in angle:
         datafile.write(asd)
     datafile.close()
 
-assert(0)
+#If you want the breakdown of the NEXAFS spectrum in terms of the individual atom contributions comment out the quit() command
+quit()
 
 #Run this part to output the individual atom contribution spectra, only for one incidince angle at a time
 xs = []
 ys = []
 
-for z in range(10):
+for z in range(len(numbers)):
     x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
             coeffs = I[z,:], broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
     xs.append(x_tmp)
@@ -135,4 +138,4 @@ for z in range(10):
     for (xsz, ysz) in zip(x_tmp, y_tmp):
         txt = str(xsz) + ' ' + str(ysz) + '\n'
         txtfile.write(txt)
-    txtfile.close
+    txtfile.close()

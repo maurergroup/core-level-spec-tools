@@ -16,7 +16,9 @@ def get_energy_level(line):
 #Set the element, the numbers of the XPS directories and the seedname of
 #the castep calculations
 element = 'C'
-atoms = list(range(0,10))
+num_start = 48
+num_end = 57
+numbers = list(range(num_start,num_end+1))
 filename = 'azulene_Ag.castep'
 
 #######################################################################
@@ -35,7 +37,7 @@ pseC = re.findall(r'energy(.*?)e', pseC, re.DOTALL)
 out.close()
 #Open the first excited atom .castep file and do the same as before for
 #excited element 
-outx = open(element + str(atoms[0]) + '/' + filename, 'r')
+outx = open(element + str(numbers[0]) + '/' + filename, 'r')
 contentx = outx.read()
 atoCx = re.findall(r'for '+element+':exc: 1(.*?)V', contentx, re.DOTALL)
 atoCx = "".join(atoCx)
@@ -87,7 +89,7 @@ print('Ground-state energy:', ground_enrgy)
 
 #Get all of the individual final excited state energies for all atoms
 energies = []
-for i in atoms:
+for i in numbers:
     with open(element + str(i) + '/' + filename, 'r') as exc:
         for line in exc:
             if F_enrgy in line:
