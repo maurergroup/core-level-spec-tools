@@ -69,7 +69,6 @@ with open (element+str(numbers[0])+'/'+molecule+'_'+metal+'.param') as param:
 peaks = np.zeros([len(numbers),int(spin_num)])
 I = np.zeros([len(numbers), int(spin_num)])
 
-
 ###############################################
 def main():
 #Loop over spin, MOs and angles in the indivdual directories
@@ -172,3 +171,5 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
         pseudovoigt_vec=PseudoVoigt(x_axis[i],eigenvalues,sigma,mixing)*coeffs
         data[i]= np.sum(pseudovoigt_vec)
     return x_axis, data
+
+main()
