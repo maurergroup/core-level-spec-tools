@@ -1,5 +1,92 @@
 import numpy as np
 
+######BROADENING PARAMETERS###################################
+
+xstart = 275. #Start Value
+xstop = 330. #End Value
+broad1 = 0.75 #Broadening value for first section 
+broad2 = 2.0 #Broadening value for last section
+firstpeak = 290.0 
+ewid1 = firstpeak+5.0 #Set the range to linearly move from broad1 to broad2 
+ewid2 = firstpeak+15.0
+mix1 = 0.2 #First G/L mix raitio
+mix2 = 0.8 #Last G/L mix ratio
+
+######SYSTEM PARAMETERS########################################
+
+molecule = 'azulene' #Name of molecule
+metal = 'Ag' #Surface in system
+element = 'C' 
+num_start = 48 #First index number of the atom directories
+num_end = 57 #Last index number of the atom directories
+n_type = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
+angle = ['t25','t53','t90'] #Incidence angles
+atom = '4' #The number of the excited atom in the list of elements in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
+atom_contribute = False
+
+#####SETUP ALL LIST AND VARIABLES NEEDED#######################
+
+#Create a list of all the atoms
+numbers = list(range(num_start,num_end+1))
+
+#Set up a list of all the folders all the data is in C48/, C49/... C57/
+folders = []
+for n in numbers:
+    folders.append(element+str(n)+'/')
+
+#Create variable with a string for the delta file which will be read
+filename = '/'+molecule+'_'+metal+'_'+atom+'_1_1_1_deltas.dat'
+
+#Get the length of the deltas file
+bands = np.loadtxt(element+str(numbers[0])+'/'+angle[0]+'/'+filename)
+bands_num = len(bands)
+
+#Create arrays with sizes of the system to use
+peaks = np.zeros([len(numbers),bands_num])
+I = np.zeros([len(numbers),bands_num])
+
+###########################################################
+def main():
+#Loop over all the angles and the individual directories
+    for a in angle:
+        for i,direc in enumerate(folders):
+#Load the data from the MolPDOS calculation  
+            nex_data = np.loadtxt(direc+a+filename)
+            x, y = nex_data[:,0], nex_data[:,n_type]
+            peaks[i,:] = x
+            I[i,:] = y
+#Write out all of the data for all atoms into a delta peaks file
+        nex_del_file = open(molecule+'_'+metal+'_deltas_'+a+'.txt','w')
+        nex_del_file.write('#   <x in eV>     Intensity\n')
+        for p,i in zip(peaks.flatten(), I.flatten()):
+            nex_del_file.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
+        nex_del_file.close()
+#Apply the broadening to the data
+        x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
+            coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
+#Write out spectrum into a text file
+        nex_spec_file = open(molecule+'_'+metal+'_spectrum_'+a+'.txt', 'w')
+        for (xi, yi) in zip(x,y):
+            nex_data = str(xi) + ' ' + str(yi) + '\n'
+            nex_spec_file.write(nex_data)
+        nex_spec_file.close()
+#Calculates the individual atom contributions of the NEXAFS spectra if selected above
+        if atom_contribute == True:
+            xs = []
+            ys = []
+            for z in range(len(numbers)):
+                x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
+                        coeffs = I[z,:], broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
+                xs.append(x_tmp)
+                ys.append(y_tmp)
+
+                atom_file = open(molecule+'_'+metal+'_'+element+str(z)+'_'+a+'.txt', 'w')
+                for (xsi, ysi) in zip(x_tmp, y_tmp):
+                    atom_data = str(xsi) + ' ' + str(ysi) + '\n'
+                    atom_file.write(atom_data)
+                atom_file.close()
+
+############################################################
 def gaussian(x, x_mean, broadening):
 
     gaussian_val = np.sqrt((4*np.log(2))/(np.pi*(broadening**2)))* np.exp(-((4*np.log(2))/(broadening**2))*(x-x_mean)**2);
@@ -54,88 +141,4 @@ def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = Non
         data[i]= np.sum(pseudovoigt_vec)
     return x_axis, data
 
-######BROADENING PARAMETERS###################################
-
-xstart = 275. #Start Value
-xstop = 330. #End Value
-broad1 = 0.75 #Broadening value for first section 
-broad2 = 2.0 #Broadening value for last section
-firstpeak = 290.0 
-ewid1 = firstpeak+5.0 #Set the range to linearly move from broad1 to broad2 
-ewid2 = firstpeak+15.0
-mix1 = 0.2 #First G/L mix raitio
-mix2 = 0.8 #Last G/L mix ratio
-
-######SYSTEM PARAMETERS########################################
-
-n_type = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
-angle = ['t25','t53','t90'] #Incidence angles
-molecule = 'azulene' #Name of molecule
-metal = 'Ag' #Surface in system
-elem = 'C' 
-num_start = 48 # Set the num_start and num_end to values corresponding the the first and last numbers of your directories C48, C49... C57
-num_end = 57
-numbers = list(range(num_start,num_end)) #Creates a range of numbers corresponding to the directorie numbers
-atom = '4' #The number of the excited atom in the list of elements in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
-
-######SETUP ALL LIST AND VARIABLES NEEDED#######################
-
-#Set up a list of all the folders all the data is in C48/, C49/... C57/
-folders = []
-for n in numbers:
-    folders.append(elem+str(n)+'/')
-
-#Create variable with a string for the delta file which will be read
-filename = '/'+molecule+'_'+metal+'_'+atom+'_1_1_1_deltas.dat'
-
-#Get the length of the deltas file
-bands = np.loadtxt(elem+str(numbers[0])+'/'+angle[0]+'/'+filename)
-bands_num = len(bands)
-
-#Create arrays with sizes of the system to use
-peaks = np.zeros([len(numbers),bands_num])
-I = np.zeros([len(numbers),bands_num])
-
-###########################################################
-#Loop over all the angles and the individual directories
-for a in angle:
-    for i,direc in enumerate(folders):
-#Load the data from the MolPDOS calculation  
-        data = np.loadtxt(direc+a+filename)
-        x, y = data[:,0], data[:,n_type]
-        peaks[i,:] = x
-        I[i,:] = y
-#Write out all of the data for all atoms into a delta peaks file
-    fileout = open(molecule+'_'+metal+'_deltas_'+a+'.txt','w')
-    fileout.write('#   <x in eV>     Intensity\n')
-    for p,i in zip(peaks.flatten(), I.flatten()):
-        fileout.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
-    fileout.close()
-#Apply the broadening to the data
-    x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
-        coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-#Write out spectrum into a text file
-    datafile = open(molecule+'_'+metal+'_spectrum_'+a+'.txt', 'w')
-    for (xi, yi) in zip(x,y):
-        asd = str(xi) + ' ' + str(yi) + '\n'
-        datafile.write(asd)
-    datafile.close()
-
-#If you want the breakdown of the NEXAFS spectrum in terms of the individual atom contributions comment out the quit() command
-quit()
-
-#Run this part to output the individual atom contribution spectra, only for one incidince angle at a time
-xs = []
-ys = []
-
-for z in range(len(numbers)):
-    x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
-            coeffs = I[z,:], broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-    xs.append(x_tmp)
-    ys.append(y_tmp)
-
-    txtfile = open(molecule+'_'+metal+'_'+elem+str(z)+'.txt', 'w')
-    for (xsz, ysz) in zip(x_tmp, y_tmp):
-        txt = str(xsz) + ' ' + str(ysz) + '\n'
-        txtfile.write(txt)
-    txtfile.close()
+main()
