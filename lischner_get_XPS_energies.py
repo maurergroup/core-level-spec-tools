@@ -1,4 +1,6 @@
+from typing import Final
 from ase.io import read
+from force_basis_get_XPS_energies import INITIAL
 
 def get_energy_level(line):
     for word in line.split():
@@ -7,31 +9,31 @@ def get_energy_level(line):
         except ValueError:
             pass
 
-out = 'aims.out'  
-initial = 'ground/'                        
-final = 'hole/'
-energy = 's.c.f. calculation      :'
+OUT = 'aims.out'  
+INITIAL = 'ground/'                        
+FINAL = 'hole/'
+ENERGY = 's.c.f. calculation      :'
 
-element = 'C'
-atoms = list(range(1,11))
-grenrgys = []
-excienrgys = []
+ELEMENT = 'C'
+ATOMS = list(range(1,11))
+GROUND_EN = []
+EXC_EN = []
 
-for i in atoms:
-    with open(element + str(i) + '/' + initial + out, 'r') as ground:
-        for line in ground:
-            if energy in line:
-                grenrgys.append(get_energy_level(line))
+for i in ATOMS:
+    with open(ELEMENT + str(i) + '/' + INITIAL + OUT, 'r') as GROUND_FILE:
+        for line in GROUND_FILE:
+            if ENERGY in line:
+                GROUND_EN.append(get_energy_level(line))
 
-    with open(element + str(i) + '/' + final + out, 'r') as exci:
-        for line in exci:
-            if energy in line:
-                excienrgys.append(get_energy_level(line))
-xps = []
-zip_object = zip(excienrgys, grenrgys)
-for excienrgys_i, grenrgys_i in zip_object:
-    xps.append(excienrgys_i-grenrgys_i)
+    with open(ELEMENT + str(i) + '/' + FINAL + OUT, 'r') as EXC_FILE:
+        for line in EXC_FILE:
+            if ENERGY in line:
+                EXC_EN.append(get_energy_level(line))
+XPS = []
+zip_object = zip(EXC_EN, GROUND_EN)
+for exc_en_i, ground_en_i in zip_object:
+    XPS.append(exc_en_i-ground_en_i)
 
-with open(element+'_XPS_peaks.txt', 'w') as f:
-    for item in xps:
-        f.write('%s\n' % item)
+with open(ELEMENT + '_XPS_peaks.txt', 'w') as BE_FILE:
+    for item in XPS:
+        BE_FILE.write('%s\n' % item)

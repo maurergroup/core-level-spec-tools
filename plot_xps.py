@@ -2,95 +2,97 @@ import numpy as np
 
 ######BROADENING PARAMETERS###################################
 
-xstart = 285. #Start Value
-xstop = 305. #End Value
+X_START = 285. #Start Value
+X_STOP = 305. #End Value
 broad = 0.7 #Broadening value for first section 
 mix = 0.3 #G/L mix ratio
 
 ##############################################################
 
-atom_contribute = False
+ATOM_contribute = False
 
 def main():
-#Set what element you have calculated XPS for
-    element = 'C'
+#Set what ELEMENT you have calculated XPS for
+    ELEMENT = 'C'
 #Read in the XPS peaks in generated with python script
-    xps_data = np.loadtxt(element+'_XPS_peaks.txt')
+    xps_data = np.loadtxt(ELEMENT+'_XPS_peaks.txt')
     print(xps_data)
 
-#Apply the broadening
-    x, y = dos_binning(xps_data, broadening=broad, mix=mix, start=xstart, stop=xstop,
-                coeffs = None)
+#Apply the BROADENING
+    x, y = dos_binning(xps_data, BROADENING=broad, mix=mix, START=X_START, STOP=X_STOP,
+                COEFFS = None)
 
 #Write out the spectrum to a text file
-    spec_file = open(element+'_XPS_spectrum.txt', 'w')
+    spec_file = open(ELEMENT+'_XPS_spectrum.txt', 'w')
     for (xi, yi) in zip(x,y):
         spec_dat = str(xi) + ' ' + str(yi) + '\n'
         spec_file.write(spec_dat)
     spec_file.close()
 
-    if atom_contribute == True:
+    if ATOM_contribute == True:
         xs = []
         ys = []
 
         for z in range(len(xps_data)):
             peak = []
             peak.append(xps_data[z])
-            x_tmp, y_tmp = dos_binning(peak, broadening=broad, mix=mix, start=xstart, stop=xstop,
-                        coeffs = None,)
+            x_tmp, y_tmp = dos_binning(peak, BROADENING=broad, mix=mix, START=X_START, STOP=X_STOP,
+                        COEFFS = None,)
             xs.append(x_tmp)
             ys.append(y_tmp)
 
-            atom_file = open(element+'_XPS_spectrum_'+element+str(z)+'.txt','w')
+            ATOM_file = open(ELEMENT+'_XPS_spectrum_'+ELEMENT+str(z)+'.txt','w')
             for (xsz, ysz) in zip(x_tmp, y_tmp):
-                atom_data = str(xsz) + ' ' + str(ysz) + '\n'
-                atom_file.write(atom_data)
-            atom_file.close()
+                ATOM_data = str(xsz) + ' ' + str(ysz) + '\n'
+                ATOM_file.write(ATOM_data)
+            ATOM_file.close()
         else:
             quit()
 
 ##############################################################
 
-def gaussian(x, x_mean, broadening):
+def gaussian(X, X_MEAN, BROADENING):
     
-    gaussian_val = np.sqrt((4*np.log(2))/(np.pi*(broadening**2)))* np.exp(-((4*np.log(2))/(broadening**2))*(x-x_mean)**2);
-    return gaussian_val
+    GAUSSIAN_VAL = np.sqrt((4*np.log(2))/(np.pi*(BROADENING**2)))* np.exp(-((4*np.log(2))/(BROADENING**2))*(X-X_MEAN)**2);
+    return GAUSSIAN_VAL
 
-def lorentzian(x, x_mean, broadening):
+def lorentzian(X, X_MEAN, BROADENING):
 
-    lorentzian_val = (1/(2*np.pi))* (broadening)/(((broadening/2)**2)+(x-x_mean)**2);
-    return lorentzian_val
+    LORENTZIAN_VAL = (1/(2*np.pi))* (BROADENING)/(((BROADENING/2)**2)+(X-X_MEAN)**2);
+    return LORENTZIAN_VAL
 
-def PseudoVoigt(x, x_mean, broadening, mixing):
+def PseudoVoigt(X, X_MEAN, BROADENING, MIXING):
     """ 
     Combines gaussian and lorentzian schemes together
     """
-    return (1-mixing)*gaussian(x, x_mean, broadening)+mixing*lorentzian(x, x_mean, broadening)
+    return (1-MIXING)*gaussian(X, X_MEAN, BROADENING)+MIXING*lorentzian(X, X_MEAN, BROADENING)
 
-def dos_binning(eigenvalues, broadening=0.75, bin_width=0.01, mix=0.,
-        coeffs=None, start=0.0, stop=10.0):
+def dos_binning(EIGENVALUES, BROADENING=0.75, BIN_WIDTH=0.01, MIX=0.,
+        COEFFS=None, START=0.0, STOP=10.0):
     """ 
-    performs binning for a given set of eigenvalues and 
-    optionally weight coeffs.
+    performs binning for a given set of EIGENVALUES and 
+    optionally weight COEFFS.
     """
-    if coeffs is None:
-        coeffs = np.ones(len(eigenvalues))
-    lowest_e = start
-    highest_e = stop
-    num_bins = int((highest_e-lowest_e)/bin_width)
-    x_axis = np.zeros([num_bins])
-    data = np.zeros([num_bins])
-    #setting up x-axis
-    for i in range(num_bins):
-        x_axis[i] = lowest_e + i * bin_width
-    #get DOS
-    sigma=broadening
-    mixing=mix
+    if COEFFS is None:
+        COEFFS = np.ones(len(EIGENVALUES))
 
-    for i in range(num_bins):
-        pseudovoigt_vec = np.zeros((len(eigenvalues)))
-        pseudovoigt_vec=PseudoVoigt(x_axis[i],eigenvalues,sigma,mixing)*coeffs
-        data[i]= np.sum(pseudovoigt_vec)
-    return x_axis, data
+    LOWEST_E = START
+    HIGHEST_E = STOP
+    NUM_BINS = int((HIGHEST_E-LOWEST_E)/BIN_WIDTH)
+    X_AXIS = np.zeros([NUM_BINS])
+    data = np.zeros([NUM_BINS])
+    #setting up x-axis
+    for i in range(NUM_BINS):
+        X_AXIS[i] = LOWEST_E + i * BIN_WIDTH
+    #get DOS
+
+    SIGMA = BROADENING
+    MIXING = MIX
+
+    for i in range(NUM_BINS):
+        PSEUDO_VOIGT_VEC = np.zeros((len(EIGENVALUES)))
+        PSEUDO_VOIGT_VEC=PseudoVoigt(X_AXIS[i],EIGENVALUES,SIGMA,MIXING)*COEFFS
+        data[i]= np.sum(PSEUDO_VOIGT_VEC)
+    return X_AXIS, data
 
 main()

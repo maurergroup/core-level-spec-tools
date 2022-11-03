@@ -2,143 +2,145 @@ import numpy as np
 
 ######BROADENING PARAMETERS###################################
 
-xstart = 275. #Start Value
-xstop = 330. #End Value
-broad1 = 0.75 #Broadening value for first section 
-broad2 = 2.0 #Broadening value for last section
-firstpeak = 290.0 
-ewid1 = firstpeak+5.0 #Set the range to linearly move from broad1 to broad2 
-ewid2 = firstpeak+15.0
-mix1 = 0.2 #First G/L mix raitio
-mix2 = 0.8 #Last G/L mix ratio
+X_START = 275. #Start Value
+X_STOP = 330. #End Value
+BROAD_1 = 0.75 #Broadening value for first section 
+BROAD_2 = 2.0 #Broadening value for last section
+FIRST_PEAK = 290.0 
+EWID_1 = FIRST_PEAK+5.0 #Set the range to linearly move from BROAD_1 to BROAD_2 
+EWID_2 = FIRST_PEAK+15.0
+MIX_1 = 0.2 #First G/L mix raitio
+MIX_2 = 0.8 #Last G/L mix ratio
 
 ######SYSTEM PARAMETERS########################################
 
-molecule = 'azulene' #Name of molecule
-metal = 'Ag' #Surface in system
-element = 'C' 
-num_start = 48 #First index number of the atom directories
-num_end = 57 #Last index number of the atom directories
-n_type = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
-angle = ['t25','t53','t90'] #Incidence angles
-atom = '4' #The number of the excited atom in the list of elements in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
-atom_contribute = False
+MOLECULE = 'azulene' #Name of MOLECULE
+METAL = 'Ag' #Surface in system
+ELEMENT = 'C' 
+NUM_START = 48 #First index number of the ATOM directories
+NUM_END = 57 #Last index number of the ATOM directories
+N_TYPE = 4 #1 for Total NEXAFS, 2 for angular, 3 for polarised, 4 for average polarised
+ANGLE = ['t25','t53','t90'] #Incidence ANGLEs
+ATOM = '4' #The number of the excited ATOM in the list of ELEMENTs in the system, always last do if systems contains H, C, Ag, C:exc, it will be 4
+ATOM_contribute = False
 
 #####SETUP ALL LIST AND VARIABLES NEEDED#######################
 
-#Create a list of all the atoms
-numbers = list(range(num_start,num_end+1))
+#Create a list of all the ATOMs
+NUMBERS = list(range(NUM_START,NUM_END+1))
 
-#Set up a list of all the folders all the data is in C48/, C49/... C57/
-folders = []
-for n in numbers:
-    folders.append(element+str(n)+'/')
+#Set up a list of all the FOLDERS all the data is in C48/, C49/... C57/
+FOLDERS = []
+for n in NUMBERS:
+    FOLDERS.append(ELEMENT+str(n)+'/')
 
 #Create variable with a string for the delta file which will be read
-filename = '/'+molecule+'_'+metal+'_'+atom+'_1_1_1_deltas.dat'
+FILE_NAME = '/'+MOLECULE+'_'+METAL+'_'+ATOM+'_1_1_1_deltas.dat'
 
 #Get the length of the deltas file
-bands = np.loadtxt(element+str(numbers[0])+'/'+angle[0]+'/'+filename)
-bands_num = len(bands)
+BANDS = np.loadtxt(ELEMENT + str(NUMBERS[0]) + '/' + ANGLE[0] + '/' + FILE_NAME)
+BANDS_NUM = len(BANDS)
 
 #Create arrays with sizes of the system to use
-peaks = np.zeros([len(numbers),bands_num])
-I = np.zeros([len(numbers),bands_num])
+PEAKS = np.zeros([len(NUMBERS),BANDS_NUM])
+I = np.zeros([len(NUMBERS),BANDS_NUM])
 
 ###########################################################
 def main():
-#Loop over all the angles and the individual directories
-    for a in angle:
-        for i,direc in enumerate(folders):
+#Loop over all the ANGLEs and the individual directories
+    for a in ANGLE:
+        for i,direc in enumerate(FOLDERS):
 #Load the data from the MolPDOS calculation  
-            nex_data = np.loadtxt(direc+a+filename)
-            x, y = nex_data[:,0], nex_data[:,n_type]
-            peaks[i,:] = x
-            I[i,:] = y
-#Write out all of the data for all atoms into a delta peaks file
-        nex_del_file = open(molecule+'_'+metal+'_deltas_'+a+'.txt','w')
-        nex_del_file.write('#   <x in eV>     Intensity\n')
-        for p,i in zip(peaks.flatten(), I.flatten()):
-            nex_del_file.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
-        nex_del_file.close()
-#Apply the broadening to the data
-        x, y = dos_binning(peaks.flatten(), broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
-            coeffs = I.flatten(), broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
+            NEX_DATA = np.loadtxt(direc + a + FILE_NAME)
+            X, Y = NEX_DATA[:,0], NEX_DATA[:,N_TYPE]
+            PEAKS[i,:] = X
+            I[i,:] = Y
+#Write out all of the data for all ATOMs into a delta peaks file
+        NEX_DEL_FILE = open(MOLECULE + '_' + METAL + '_deltas_' + a + '.txt','w')
+        NEX_DEL_FILE.write('#   <x in eV>     Intensity\n')
+        for p,i in zip(PEAKS.flatten(), I.flatten()):
+            NEX_DEL_FILE.write('{0:16.8f}    {1:16.8f}\n'.format(p,i))
+        NEX_DEL_FILE.close()
+#Apply the BROADENING to the data
+        X, Y = dos_binning(PEAKS.flatten(), BROADENING=BROAD_1, MIX_1=MIX_1, MIX_2=MIX_2, START=X_START, STOP=X_STOP,
+            COEFFS = I.flatten(), BROADENING_2=BROAD_2, EWID_1=EWID_1, EWID_2=EWID_2)
 #Write out spectrum into a text file
-        nex_spec_file = open(molecule+'_'+metal+'_spectrum_'+a+'.txt', 'w')
-        for (xi, yi) in zip(x,y):
-            nex_data = str(xi) + ' ' + str(yi) + '\n'
-            nex_spec_file.write(nex_data)
-        nex_spec_file.close()
-#Calculates the individual atom contributions of the NEXAFS spectra if selected above
-        if atom_contribute == True:
-            xs = []
-            ys = []
-            for z in range(len(numbers)):
-                x_tmp, y_tmp = dos_binning(peaks[z,:], broadening=broad1, mix1=mix1, mix2=mix2, start=xstart, stop=xstop,
-                        coeffs = I[z,:], broadening2=broad2, ewid1=ewid1, ewid2=ewid2)
-                xs.append(x_tmp)
-                ys.append(y_tmp)
+        NEX_SPEC_FILE = open(MOLECULE + '_' + METAL + '_spectrum_' + a + '.txt', 'w')
+        for (X_I, Y_I) in zip(X,Y):
+            NEX_DATA = str(X_I) + ' ' + str(Y_I) + '\n'
+            NEX_SPEC_FILE.write(NEX_DATA)
+        NEX_SPEC_FILE.close()
+#Calculates the individual ATOM contributions of the NEXAFS spectra if selected above
+        if ATOM_contribute == True:
+            XS = []
+            YS = []
+            for z in range(len(NUMBERS)):
+                X_TMP, Y_TMP = dos_binning(PEAKS[z,:], BROADENING=BROAD_1, MIX_1=MIX_1, MIX_2=MIX_2, START=X_START, STOP=X_STOP,
+                        COEFFS = I[z,:], BROADENING_2=BROAD_2, EWID_1=EWID_1, EWID_2=EWID_2)
+                XS.append(X_TMP)
+                YS.append(Y_TMP)
 
-                atom_file = open(molecule+'_'+metal+'_'+element+str(z)+'_'+a+'.txt', 'w')
-                for (xsi, ysi) in zip(x_tmp, y_tmp):
-                    atom_data = str(xsi) + ' ' + str(ysi) + '\n'
-                    atom_file.write(atom_data)
-                atom_file.close()
+                ATOM_file = open(MOLECULE + '_' + METAL + '_' + ELEMENT + str(z) + '_' + a +'.txt', 'w')
+                for (XS_I, YS_I) in zip(X_TMP, Y_TMP):
+                    ATOM_data = str(XS_I) + ' ' + str(YS_I) + '\n'
+                    ATOM_file.write(ATOM_data)
+                ATOM_file.close()
 
 ############################################################
-def gaussian(x, x_mean, broadening):
+def gaussian(X, X_MEAN, BROADENING):
 
-    gaussian_val = np.sqrt((4*np.log(2))/(np.pi*(broadening**2)))* np.exp(-((4*np.log(2))/(broadening**2))*(x-x_mean)**2);
-    return gaussian_val
+    GAUSSIAN_VAL = np.sqrt((4*np.log(2))/(np.pi*(BROADENING**2)))* np.exp(-((4*np.log(2))/(BROADENING**2))*(X-X_MEAN)**2);
+    return GAUSSIAN_VAL
 
-def lorentzian(x, x_mean, broadening):
+def lorentzian(X, X_MEAN, BROADENING):
 
-    lorentzian_val = (1/(2*np.pi))* (broadening)/(((broadening/2)**2)+(x-x_mean)**2);
-    return lorentzian_val
+    LORENTZIAN_VAL = (1/(2*np.pi))* (BROADENING)/(((BROADENING/2)**2)+(X-X_MEAN)**2);
+    return LORENTZIAN_VAL
 
-def PseudoVoigt(x, x_mean, broadening, mixing):
+def PseudoVoigt(X, X_MEAN, BROADENING, MIXING):
     """ 
     Combines gaussian and lorentzian schemes together
     """
-    return (1-mixing)*gaussian(x, x_mean, broadening)+mixing*lorentzian(x, x_mean, broadening)
+    return (1-MIXING)*gaussian(X, X_MEAN, BROADENING)+MIXING*lorentzian(X, X_MEAN, BROADENING)
 
-def dos_binning(eigenvalues,broadening=0.75, bin_width=0.01, mix1=0., mix2 = None,
-        coeffs=None,start=0.0, stop=10.0, broadening2 = None, ewid1 = 10.0, ewid2 = 20.0):
+def dos_binning(EIGENVALUES,BROADENING=0.75, BIN_WIDTH=0.01, MIX_1=0., MIX_2 = None,
+        COEFFS=None,START=0.0, STOP=10.0, BROADENING_2 = None, EWID_1 = 10.0, EWID_2 = 20.0):
     """ 
-    performs binning for a given set of eigenvalues and 
-    optionally weight coeffs.
+    performs binning for a given set of EIGENVALUES and 
+    optionally weight COEFFS.
     """
-    if broadening2 is None:
-        broadening2 = broadening
-    if coeffs is None:
-        coeffs = np.ones(len(eigenvalues))
-    lowest_e = start
-    highest_e = stop
-    num_bins = int((highest_e-lowest_e)/bin_width)
-    x_axis = np.zeros([num_bins])
-    data = np.zeros([num_bins])
-    #setting up x-axis
-    for i in range(num_bins):
-        x_axis[i] = lowest_e + i * bin_width
-    #get DOS
-    sigma=np.zeros((len(eigenvalues)))
-    mixing=np.zeros((len(eigenvalues)))
+    if BROADENING_2 is None:
+        BROADENING_2 = BROADENING
+    if COEFFS is None:
+        COEFFS = np.ones(len(EIGENVALUES))
 
-    for ei,e in enumerate(eigenvalues):
-        if e<=(ewid1):
-            sigma[ei]=broadening
-            mixing[ei]=mix1
-        elif e>(ewid2):
-            sigma[ei]=broadening2
-            mixing[ei]=mix2
+    LOWEST_E = START
+    HIGHEST_E = STOP
+    NUM_BINS = int((HIGHEST_E-LOWEST_E)/BIN_WIDTH)
+    X_AXIS = np.zeros([NUM_BINS])
+    data = np.zeros([NUM_BINS])
+    #setting up x-axis
+    for i in range(NUM_BINS):
+        X_AXIS[i] = LOWEST_E + i * BIN_WIDTH
+    #get DOS
+    SIGMA = np.zeros((len(EIGENVALUES)))
+    MIXING = np.zeros((len(EIGENVALUES)))
+
+    for ei,e in enumerate(EIGENVALUES):
+        if e<=(EWID_1):
+            SIGMA[ei]=BROADENING
+            MIXING[ei]=MIX_1
+        elif e>(EWID_2):
+            SIGMA[ei]=BROADENING_2
+            MIXING[ei]=MIX_2
         else:
-            sigma[ei]=broadening + ((broadening2-broadening)/(ewid2-ewid1))*(e-ewid1)
-            mixing[ei]=(mix1 + ((mix2-mix1)/(ewid2-ewid1))*(e-ewid1))
-    for i in range(num_bins):
-        pseudovoigt_vec = np.zeros((len(eigenvalues)))
-        pseudovoigt_vec=PseudoVoigt(x_axis[i],eigenvalues,sigma,mixing)*coeffs
-        data[i]= np.sum(pseudovoigt_vec)
-    return x_axis, data
+            SIGMA[ei]=BROADENING + ((BROADENING_2-BROADENING)/(EWID_2-EWID_1))*(e-EWID_1)
+            MIXING[ei]=(MIX_1 + ((MIX_2-MIX_1)/(EWID_2-EWID_1))*(e-EWID_1))
+
+    for i in range(NUM_BINS):
+        PSEUDO_VOIGT_VEC = np.zeros((len(EIGENVALUES)))
+        PSEUDO_VOIGT_VEC=PseudoVoigt(X_AXIS[i],EIGENVALUES,SIGMA,MIXING)*COEFFS
+        data[i]= np.sum(PSEUDO_VOIGT_VEC)
+    return X_AXIS, data
 
 main()
