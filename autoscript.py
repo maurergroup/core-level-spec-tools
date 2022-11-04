@@ -1,23 +1,22 @@
 #!/usr/bin/python
 
-from lib2to3.refactor import MultiprocessRefactoringTool
 import os
 import shutil
-
-from pathlib2 import Path
 from ase.calculators.castep import Castep
 from ase.io import read
-from core_excitation import CoreExcitation
 from core_excitation import NEXAFS, XPS
 
 #Full name of the geometry input file for script to read and create files for
 INPUT_NAME = 'azulene_Ag.cell'
 #Seedname of the CASTEP files that the script will output
+ELEMENT = 'C'
 MOLECULE = 'azulene'
 METAL = 'Ag'
 
 #Add all ATOM pseudopotentials you want
 C_PSEUDO = 'C 2|1.4|10|12|13|20:21(qc=7)'
+C_XCORE_HOLE = '{1s1,2s2,2p3}'
+C_NCORE_HOLE = '{1s1.5,2s2,2p2.5}'
 H_PSEUDO = 'H 1|0.6|13|15|17|10(qc=8)'
 #N_PSEUDO = 'N 2|1.1|14|16|18|20:21(qc=7)'
 M_PSEUDO = 'Pt 3|2.4|7|8|9|50U:60:51:52:43(qc=6)'
@@ -34,6 +33,9 @@ CHECK_FILE = 'azulene_free.check'
 #overide and change in NEXAFS put into QM2
 
 SYSTEM = MOLECULE + '_' + METAL
+IDX = C_PSEUDO.index('(')
+C_X_PSEUDO = C_PSEUDO[2:IDX] + C_XCORE_HOLE + C_PSEUDO[IDX:]
+C_N_PSEUDO = C_PSEUDO[2:IDX] + C_NCORE_HOLE + C_PSEUDO[IDX:]
 
 QM1 = Castep(
             castep_command='/storage/molases/mstrdw/MARBURG_bins/castep20.1/castep.mpi', #Directory path to location of castep binary
@@ -51,8 +53,8 @@ QM1 = Castep(
             grid_scale=2.0,
             iprint=1.0,
             max_scf_cycles=300,
-            METALs_method='dm',
-            MIXING_scheme='Pulay',
+            metals_method='dm',
+            mixing_scheme='Pulay',
             nextra_bands=150,
             smearing_scheme='Gaussian',
             smearing_width=0.1,
@@ -85,13 +87,13 @@ QM2 = Castep(
 #Using core_excition.py read the input file and run XPS and NEXAFS to generate the folder
 #and files
 CELL = read(INPUT_NAME)
-XCE = XPS(ATOMs=CELL, ELEMENT='C', pspots='2|1.4|10|12|13|20:21{1s1,2s2,2p3}(qc=7)', calc=QM1)
-XCE.move_hole()
+XCE = XPS(atoms = CELL, element = ELEMENT, pspots = C_X_PSEUDO, calc = QM1)
+XCE.move_hole(element = ELEMENT, system = SYSTEM)
 
 QM1.merge_param(QM2.param) #Merge QM2 with QM1 to overwrite any changes needed in the NEXAFS files
 CELL = read(INPUT_NAME)
-NCE = NEXAFS(ATOMs=CELL, ELEMENT='C', pspots='2|1.4|10|12|13|20:21{1s1.5,2s2,2p2.5}(qc=7)', calc=QM1)
-NCE.move_hole()
+NCE = NEXAFS(atoms = CELL, element = ELEMENT, pspots = C_N_PSEUDO, calc = QM1)
+NCE.move_hole(element = ELEMENT, system = SYSTEM)
 
 #############################################################
 #Add all the ground state pseudopotentials stated above to the XPS and NEXAFS .cell files
@@ -135,9 +137,9 @@ for n in N_DIRECS:
 
 # Create folder with inputs for free standing overlayer
 
-PATH = os.getcwd()
-os.mkdir(PATH+'fso')
-os.chdir(PATH+'fso')
+#PATH = os.getcwd()
+#os.mkdir(PATH+'fso')
+#os.chdir(PATH+'fso')
 
 
 ###########################################################
@@ -161,9 +163,9 @@ for n in N_DIRECS:
 #Add devel_code block for MolPDOS calculation to .param file in all NEXAFS directories
 #A seperate .deltascf file will be needed to created and added to all of the ATOM 
 #directories to define the settings wanted
-for i in N_DIRECS:
-    FILE = open(NEXAFS_DIR + i + '/' + SYSTEM + '.param', 'a+')
-    FILE.write('\n%BLOCK DEVEL_CODE\n')
-    FILE.write('MolPDOS\n')
-    FILE.write('%ENDBLOCK DEVEL_CODE')
-    FILE.close()
+#for i in N_DIRECS:
+#    FILE = open(NEXAFS_DIR + i + '/' + SYSTEM + '.param', 'a+')
+#    FILE.write('\n%BLOCK DEVEL_CODE\n')
+#    FILE.write('MolPDOS\n')
+#    FILE.write('%ENDBLOCK DEVEL_CODE')
+#    FILE.close()

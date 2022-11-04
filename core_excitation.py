@@ -12,39 +12,58 @@ class CoreExcitation(object):
         self.calc = calc
         self.directory = directory
 
-    def _find_all_elements(self):
-        self.idx = []		        	#Define idx as a string 
-        i = 0
-        for elem in self.atoms.symbols:	#Look through the elements in the atoms object				
-            if elem == self.element:	#If stated element found
-                self.idx.append(i)	    #Add element position to the idx string
-            i += 1	
-
+    # Move through each atom directory and change the index element to X
+    # and create the input files for that directory
+    def move_hole(self, element, system):
+        self._create_subdirectories()
+        for idx in self.idx:
+            if self.atoms.symbols[idx - 1] == 'X':
+                self.atoms.symbols[idx - 1] = self.element
+            self.atoms.symbols[idx] = 'X'
+            self._create_input(idx)
+        for idx in self.idx:
+            self._change_element(idx, element, system)
+    
+    # Create individual subdirectories for each atom of chosen element
     def _create_subdirectories(self):
         self._find_all_elements()
-        for idx in self.idx:			                		#For all element in the idx string
-            os.makedirs(self.prefix + self.element + str(idx))	#Make a directory for all elements found
+        for idx in self.idx:
+            os.makedirs(self.prefix + self.element + str(idx))
 
-    def move_hole(self):
-        self._create_subdirectories()
-        for idx in self.idx:					#For each element in string
-            if self.atoms.symbols[idx - 1] == 'X':		#If previous element in string is X
-                self.atoms.symbols[idx - 1] = self.element	#Change it back to stated element
-            self.atoms.symbols[idx] = 'X'			#And change new element to X
-            self._create_input(idx)				
+    # Get the index number for all atoms of the chosen element 
+    def _find_all_elements(self):
+        self.idx = [] 
+        i = 0
+        for elem in self.atoms.symbols:				
+            if elem == self.element:
+                self.idx.append(i)
+            i += 1	
 
+    # Use the ASE CASTEP calculator to write the .cell and .param input files
     def _create_input(self, idx):
-        directory = self.prefix + self.element + str(idx)	  #Defining the diretory path
-        self.calc._directory = directory			  #Changing the path of the castep calculator
-        self.atoms.set_calculator(self.calc)			  #Run the cstep calculator for cell
-        self.calc.prepare_input_files(elnes_species=self.element) #Prepare the input files for that folder
+        directory = self.prefix + self.element + str(idx)
+        self.calc._directory = directory
+        self.atoms.set_calculator(self.calc)
+        self.calc.prepare_input_files()
 
+    # Go into the all the cell files and change the instances of element X
+    # to the correct chosen excited element
+    def _change_element(self, idx, element, system):
+        search = 'X '
+        replace = element + ':exc '
+        for idx in self.idx:
+            with open(self.prefix + element + str(idx) + '/' + system + '.cell','r') as file:
+                text = file.read()
+                text = text.replace(search,replace)
+            with open(self.prefix + element + str(idx) + '/' + system + '.cell', 'w') as file:
+                file.write(text)
 class NEXAFS(CoreExcitation):
 
     prefix = 'NEXAFS/'
 
     def __init__(self, atoms, element, pspots, calc=None, directory='./'):
         super(NEXAFS, self).__init__(atoms, element, calc)
+        # Set the NEXAFS specific keywords in the calculator
         self.calc.param.task = 'ELNES'
         self.calc.param.charge = 0.5
         self.calc.set_pspot(pspot=pspots, elems='{}:exc'.format(element), manual=True)
@@ -55,6 +74,7 @@ class XPS(CoreExcitation):
 
     def __init__(self, atoms, element, pspots, calc=None, directory='./'):
         super(XPS, self).__init__(atoms, element, calc)
+        # Set the XPS specific keywords in the calculator
         self.calc.param.task = 'SINGLEPOINT'
         self.calc.param.charge = 1.0
         self.calc.set_pspot(pspot=pspots, elems='{}:exc'.format(element), manual=True)
