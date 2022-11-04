@@ -152,10 +152,12 @@ for n in N_DIRECS:
 
 ###### CREATE FREESTANDING OVRELAYER FILES ################################
 
-# Create folder with inputs for free standing overlayer
+# Create a new folder for the free standing overlayer files
 PATH = os.getcwd()
 os.mkdir(PATH + '/fso')
 
+# Open the XPS .cell file read in line and create a new .cell file for
+# the FSO with the metal atoms removed and excited atom back to normal
 with open(PATH + '/' + XPS_DIR + X_DIRECS[0] + '/' + SYSTEM + '.cell', 'r') as FILE:
     LINES = FILE.readlines()
     LINES = [line for line in LINES if METAL + ' ' not in line]
@@ -165,6 +167,7 @@ with open(PATH + '/fso/' + MOLECULE + '_free.cell', 'w') as FILE:
     for line in LINES:
         FILE.write(line)
 
+# Do the same as above for the .param file but removeing the CHARGE: keyword
 with open(PATH + '/' + XPS_DIR + X_DIRECS[0] + '/' + SYSTEM + '.param', 'r') as FILE:
     LINES = FILE.readlines()
     LINES = [line for line in LINES if 'CHARGE:' not in line]
