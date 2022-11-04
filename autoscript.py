@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
 import os
-import shutil
 from ase.calculators.castep import Castep
 from ase.io import read
 from core_excitation import NEXAFS, XPS
@@ -26,7 +25,7 @@ C_PSEUDO = 'C 2|1.4|10|12|13|20:21(qc=7)'
 C_XCORE_HOLE = '{1s1,2s2,2p3}'
 C_NCORE_HOLE = '{1s1.5,2s2,2p2.5}'
 H_PSEUDO = 'H 1|0.6|13|15|17|10(qc=8)'
-M_PSEUDO = 'Pt 3|2.4|7|8|9|50U:60:51:52:43(qc=6)'
+M_PSEUDO = 'Ag 3|1.5|0.8|15|17|19|40U:50:41:42(qc=7)'
 
 # Set if you want the code to write the keywords needed for a
 # MO projection and state the range of MO orbitals wanted, here 
@@ -46,7 +45,6 @@ MO = list(map(str, range(MO_START, MO_END+1)))
 CHECK_FILE = MOLECULE + '_free.check'
 
 ##### SET CASTEP CALCULATOR ################################################
-
 # Set up and run the ASE CASTEP calculator 
 
 # Calculator with the CASTEP keyword settings that are applicable
@@ -125,8 +123,8 @@ N_DIRECS = os.listdir(NEXAFS_DIR)
 
 # Loop over all the directories in the XPS folder
 for x in X_DIRECS:
-    XI_FILE = open(XPS_DIR+x+'/'+SYSTEM+'.cell', 'r').readlines()
-    XO_FILE = open(XPS_DIR+x+'/'+SYSTEM+'.cell', 'w')
+    XI_FILE = open(XPS_DIR + x + '/' + SYSTEM + '.cell', 'r').readlines()
+    XO_FILE = open(XPS_DIR + x + '/' + SYSTEM + '.cell', 'w')
 # Search the XI_FILE and write the pseudopotentials in the correct BLOCK   
     for line in XI_FILE:
         XO_FILE.write(line)
@@ -152,13 +150,29 @@ for n in N_DIRECS:
             NO_FILE.write(LINE_1 + '\n' + LINE_2 + '\n' + LINE_3 + '\n')
     NO_FILE.close()
 
+###### CREATE FREESTANDING OVRELAYER FILES ################################
+
 # Create folder with inputs for free standing overlayer
+PATH = os.getcwd()
+os.mkdir(PATH + '/fso')
 
-#PATH = os.getcwd()
-#os.mkdir(PATH+'fso')
-#os.chdir(PATH+'fso')
+with open(PATH + '/' + XPS_DIR + X_DIRECS[0] + '/' + SYSTEM + '.cell', 'r') as FILE:
+    LINES = FILE.readlines()
+    LINES = [line for line in LINES if METAL + ' ' not in line]
+    LINES = [line for line in LINES if C_XCORE_HOLE not in line]
+    LINES = [line.replace(ELEMENT + ':exc', ELEMENT) for line in LINES]
+with open(PATH + '/fso/' + MOLECULE + '_free.cell', 'w') as FILE:
+    for line in LINES:
+        FILE.write(line)
 
-##### WRITE MO KEYWORDS #################################################
+with open(PATH + '/' + XPS_DIR + X_DIRECS[0] + '/' + SYSTEM + '.param', 'r') as FILE:
+    LINES = FILE.readlines()
+    LINES = [line for line in LINES if 'CHARGE:' not in line]
+with open(PATH + '/fso/' + MOLECULE + '_free.param', 'w') as FILE:
+    for line in LINES:
+        FILE.write(line)
+
+###### WRITE MO KEYWORDS #################################################
 
 # If chosen above a MO projection is wanted write out the required settings
 # Please comment in and out in regards to the CASTEP version you are using
