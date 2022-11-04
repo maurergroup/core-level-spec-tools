@@ -23,7 +23,8 @@ M_PSEUDO = 'Pt 3|2.4|7|8|9|50U:60:51:52:43(qc=6)'
 
 #If a MO analysis is needed as the list of MOs to be projected and
 #checkfile name to be used as the reference for the MODOS calculation
-MO = list(map(str, range(17,29)))
+MO_START = 17
+MO_END = 28
 CHECK_FILE = 'azulene_free.check'
 
 ##############################################################
@@ -36,6 +37,7 @@ SYSTEM = MOLECULE + '_' + METAL
 IDX = C_PSEUDO.index('(')
 C_X_PSEUDO = C_PSEUDO[2:IDX] + C_XCORE_HOLE + C_PSEUDO[IDX:]
 C_N_PSEUDO = C_PSEUDO[2:IDX] + C_NCORE_HOLE + C_PSEUDO[IDX:]
+MO = list(map(MO_START, MO_END+1))
 
 QM1 = Castep(
             castep_command='/storage/molases/mstrdw/MARBURG_bins/castep20.1/castep.mpi', #Directory path to location of castep binary
