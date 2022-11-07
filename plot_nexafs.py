@@ -13,8 +13,8 @@ FIRST_PEAK = 290.0
 # Set the start and end point of the linearly increasing broadening
 # change from the first and last ranges with respect to the leading
 # peak
-EWID_1 = FIRST_PEAK+5.0
-EWID_2 = FIRST_PEAK+15.0
+EWID_1 = FIRST_PEAK + 5.0
+EWID_2 = FIRST_PEAK + 15.0
 # Set the Gaussian/Lorentzian mixing ratio for the ranges
 MIX_1 = 0.2
 MIX_2 = 0.8
@@ -44,10 +44,10 @@ ATOM_contribute = False
 
 ##### SETUP ALL LIST AND VARIABLES NEEDED #######################
 
-# Create a list of all the ATOMs
-NUMBERS = list(range(NUM_START,NUM_END+1))
+# Create a list of all the atoms
+NUMBERS = list(range(NUM_START, NUM_END + 1))
 
-# Set up a list of all the FOLDERS all the data is in C48/, C49/... C57/
+# Set up a list of all the directories all the data is in C48/, C49/... C57/
 FOLDERS = []
 for n in NUMBERS:
     FOLDERS.append(ELEMENT + str(n) + '/')
