@@ -14,7 +14,7 @@ molecule="azulene"
 metal="Ag"
 element="C"
 
-###### GET XPS BINDING ENERGIES#####################################
+###### GET XPS BINDING ENERGIES #####################################
 
 # Set the system name
 system="${molecule}_${metal}"

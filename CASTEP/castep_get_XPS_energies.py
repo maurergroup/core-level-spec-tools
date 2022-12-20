@@ -2,8 +2,8 @@ import re
 from ase.io import read
 
 # This script searches through the ground state and excited state .castep files
-#and calculates the XPS binding energies for a pseudopotential calculation 
-#based on the method in J. Phys.: Condens. Matter 21 (2009) 104204
+# and calculates the XPS binding energies for a pseudopotential calculation 
+# based on the method in J. Phys.: Condens. Matter 21 (2009) 104204
 
 ##### SYSTEM PARAMETERS #############################
 
