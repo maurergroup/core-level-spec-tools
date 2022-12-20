@@ -1,50 +1,52 @@
 import numpy as np
 
-######BROADENING PARAMETERS###################################
+###### BROADENING PARAMETER ###################################
 
-X_START = 285. #Start Value
-X_STOP = 305. #End Value
-broad = 0.7 #Broadening value for first section 
-mix = 0.3 #G/L mix ratio
+X_START = 285. # Start Value
+X_STOP = 305. # End Value
+BROAD = 0.7 # Broadening value for first section 
+MIX = 0.3 # G/L mix ratio
 
-##############################################################
+###### INPUT PARAMETERS ########################################
 
-ATOM_contribute = False
+ELEMENT = 'C'
+ATOM_CONTRIBUTE = False
+
+################################################################
 
 def main():
-#Set what ELEMENT you have calculated XPS for
-    ELEMENT = 'C'
-#Read in the XPS peaks in generated with python script
-    xps_data = np.loadtxt(ELEMENT+'_XPS_peaks.txt')
-    print(xps_data)
 
-#Apply the BROADENING
-    x, y = dos_binning(xps_data, BROADENING=broad, mix=mix, START=X_START, STOP=X_STOP,
+# Read in the XPS peaks in generated with python script
+    XPS_DATA = np.loadtxt(ELEMENT+'_XPS_peaks.txt')
+    print(XPS_DATA)
+
+# Apply the broadening
+    x, y = dos_binning(XPS_DATA, BROADENING=BROAD, mix=MIX, START=X_START, STOP=X_STOP,
                 COEFFS = None)
 
-#Write out the spectrum to a text file
+# Write out the spectrum to a text file
     spec_file = open(ELEMENT+'_XPS_spectrum.txt', 'w')
     for (xi, yi) in zip(x,y):
-        spec_dat = str(xi) + ' ' + str(yi) + '\n'
-        spec_file.write(spec_dat)
+        SPEC_DAT = str(xi) + ' ' + str(yi) + '\n'
+        spec_file.write(SPEC_DAT)
     spec_file.close()
 
-    if ATOM_contribute == True:
+    if ATOM_CONTRIBUTE == True:
         xs = []
         ys = []
 
-        for z in range(len(xps_data)):
+        for z in range(len(XPS_DATA)):
             peak = []
-            peak.append(xps_data[z])
-            x_tmp, y_tmp = dos_binning(peak, BROADENING=broad, mix=mix, START=X_START, STOP=X_STOP,
+            peak.append(XPS_DATA[z])
+            x_tmp, y_tmp = dos_binning(peak, BROADENING=BROAD, mix=MIX, START=X_START, STOP=X_STOP,
                         COEFFS = None,)
             xs.append(x_tmp)
             ys.append(y_tmp)
 
             ATOM_file = open(ELEMENT+'_XPS_spectrum_'+ELEMENT+str(z)+'.txt','w')
             for (xsz, ysz) in zip(x_tmp, y_tmp):
-                ATOM_data = str(xsz) + ' ' + str(ysz) + '\n'
-                ATOM_file.write(ATOM_data)
+                ATOM_DATA = str(xsz) + ' ' + str(ysz) + '\n'
+                ATOM_file.write(ATOM_DATA)
             ATOM_file.close()
         else:
             quit()
