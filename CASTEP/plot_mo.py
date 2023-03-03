@@ -69,7 +69,7 @@ with open(ELEMENT + str(NUMBERS[0]) + '/' + MOLECULE + '_' + METAL + '.bands', '
                     pass
 
 # Get the length of the deltas file
-BANDS = np.loadtxt(ELEMENT + str(NUMBERS[0]) + '/t' + THETA_ANGLE[0] + '_p' + PHI_ANGLE[0] + '/' + FILE_NAME)
+BANDS = np.loadtxt(ELEMENT + str(NUMBERS[0]) + '/t' + THETA_ANGLE[0] + '_p' + PHI_ANGLE[0] + FILE_NAME)
 BANDS_NUM = len(BANDS)
 
 # Read .param file to see if calculation is spin_polarised and set up required settings

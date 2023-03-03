@@ -56,7 +56,7 @@ for n in NUMBERS:
 FILE_NAME = '/' + MOLECULE + '_' + METAL + '_' + ATOM + '_1_1_1_deltas.dat'
 
 # Get the length of the deltas file
-BANDS = np.loadtxt(ELEMENT + str(NUMBERS[0]) + '/t' + THETA_ANGLE[0] + '_p' + PHI_ANGLE[0]+ '/' + FILE_NAME)
+BANDS = np.loadtxt(ELEMENT + str(NUMBERS[0]) + '/t' + THETA_ANGLE[0] + '_p' + PHI_ANGLE[0] + FILE_NAME)
 BANDS_NUM = len(BANDS)
 
 # Create arrays with sizes of the system to use
