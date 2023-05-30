@@ -67,7 +67,7 @@ class NEXAFS(CoreExcitation):
         self.calc.param.task = 'ELNES'
         self.calc.param.charge = 0.5
         # Set the half core-hole pseudopotential string for the chosen element
-        self.calc.set_pspot(pspot=pspots, elems='{}:exc'.format(element), manual=True)
+        self.calc.species_pot = [('{}:exc'.format(element), pspots)]
 
 class XPS(CoreExcitation):
 
@@ -78,5 +78,5 @@ class XPS(CoreExcitation):
         # Set the XPS specific keywords in the calculator
         self.calc.param.task = 'SINGLEPOINT'
         self.calc.param.charge = 1.0
-        # Set the full core-hole pseudopotential string for the the chosen element 
-        self.calc.set_pspot(pspot=pspots, elems='{}:exc'.format(element), manual=True)
+        # Set the full core-hole pseudopotential string for the chosen element 
+        self.calc.species_pot = [('{}:exc'.format(element), pspots)]
