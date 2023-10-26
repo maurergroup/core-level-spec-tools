@@ -3,25 +3,34 @@
 import os
 
 import numpy as np
+from tqdm import tqdm
 
 
 def get_nexafs_data(
-    theta, phi, dir, fname, peaks, bands, n_type, molecule, metal
+    theta, phi, dirs, fname, peaks, bands, n_type, molecule, metal
 ) -> tuple[np.ndarray, np.ndarray]:
     """Parse the NEXAFS data for all theta and phi"""
 
-    nexafs = np.loadtxt(f"{dir}t{theta}_p{phi}{fname}")
-    peaks = nexafs[:, 0]
-    bands = nexafs[:, n_type]
+    for i in range(len(dirs)):
+        nexafs = np.loadtxt(f"{dirs[i]}t{theta}_p{phi}{fname}")
+        peaks[i, :] = nexafs[:, 0]
+        bands[i, :] = nexafs[:, n_type]
+
+    print(f"Finished parsing NEXAFS data for theta={theta} phi={phi}")
+
+    flat_peaks = peaks.flatten()
+    flat_bands = bands.flatten()
 
     # Write out all of the data into a delta peaks file
     np.savetxt(
         f"{molecule}_{metal}_deltas_t{theta}_p{phi}.txt",
-        np.vstack((peaks, bands)).T,
+        np.vstack((flat_peaks, flat_bands)).T,
         header="# <x in eV> Intensity",
     )
 
-    return peaks, bands
+    print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
+
+    return flat_peaks, flat_bands
 
 
 def _schmid_pseudo_voigt(
@@ -82,7 +91,7 @@ def broaden(
     mix_2,
     ewid_1,
     ewid_2,
-    n_bins=10000,
+    bin_width=0.01,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Broaden dirac delta peaks
@@ -92,12 +101,13 @@ def broaden(
     dirac_peaks = list of dirac delta peaks
     eta = full width at half maximum (eta > 0)
     """
-    domain = np.linspace(start, stop, n_bins)
+    domain = np.arange(start, stop, bin_width)
     data = np.zeros([len(domain)])
 
     if coeffs is None:
         coeffs = np.zeros(len(dirac_peaks))
 
+    # Find the peaks in the different broadening regions
     mic_1_trans = np.where(dirac_peaks <= ewid_1)
     mic_2_trans = np.where((dirac_peaks > ewid_1) & (dirac_peaks <= ewid_2))
     m1t_len = len(mic_1_trans)
@@ -121,9 +131,9 @@ def broaden(
         sigma[i] = sigma_precalc * (dirac_peaks[i] - ewid_1)
         mixing[i] = mix_precalc * (dirac_peaks[i] - ewid_1)
 
-    for i in dirac_peaks:
-        V = _schmid_pseudo_voigt(domain, mixing, i, sigma)
-        data += V
+    for i in tqdm(range(len(domain))):
+        V = _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+        data[i] = np.sum(V)
 
     return domain, data
 
@@ -193,33 +203,35 @@ def main():
     tmp_bands = np.loadtxt(f"{element}{str(atom_ids[0])}/t{theta[0]}_p{phi[0]}{fname}")
 
     # Create arrays with sizes of the system to use
-    peaks = np.zeros(len(tmp_bands))
+    peaks = np.zeros([len(atom_ids), len(tmp_bands)])
     bands = peaks
 
     # Plot spectrum for all theta and phi angles
     for t in theta:
         for p in phi:
-            for dir in dirs:
-                print(t, p, dir)
-                peaks, bands = get_nexafs_data(
-                    t, p, dir, fname, peaks, bands, n_type, molecule, metal
-                )
+            peaks, bands = get_nexafs_data(
+                t, p, dirs, fname, peaks, bands, n_type, molecule, metal
+            )
 
-                x, y = broaden(
-                    start,
-                    stop,
-                    peaks,
-                    bands,
-                    omega_1,
-                    omega_2,
-                    mix_1,
-                    mix_2,
-                    ewid_1,
-                    ewid_2,
-                )
+            print(f"Broadening delta peaks for theta={t} phi={p}...")
 
-                # Write out spectrum to a text file
-                np.savetxt(f"{molecule}_{metal}_spectrum_t{t}_p{p}.txt", np.array(x, y))
+            x, y = broaden(
+                start,
+                stop,
+                peaks,
+                bands,
+                omega_1,
+                omega_2,
+                mix_1,
+                mix_2,
+                ewid_1,
+                ewid_2,
+            )
+
+            print(f"Finished broadening delta peaks for theta={t} phi={p}")
+
+            # Write out spectrum to a text file
+            np.savetxt(f"{molecule}_{metal}_spectrum_t{t}_p{p}.txt", np.array(x, y))
 
 
 if __name__ == "__main__":
