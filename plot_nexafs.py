@@ -1,266 +1,255 @@
+#!/usr/bin/env python3
+
+import os
+import re
+
 import numpy as np
-
-###### BROADENING PARAMETERS ###################################
-
-# ### Broadening parameters ###
-# # Start and end values of spectra
-# x_start = 285.0
-# x_stop = 305.0
-# # Broadening parameters for the first and last ranges
-# broad_1 = 0.75
-# broad_2 = 2.0
-# # Energy of the lead peak
-# first_peak = 289.0
-# # Set the start and end point of the linearly increasing broadening
-# # change from the first and last ranges with respect to the leading
-# # peak
-# ewid_1 = first_peak + 5.0
-# ewid_2 = first_peak + 15.0
-# # Set the Gaussian/Lorentzian mixing ratio for the ranges
-# mix_1 = 0.2
-# mix_2 = 0.8
-
-# ### System parameters ###
-
-# # Setting of the system being investigated
-# molecule = "graphene"
-# metal = "cu"
-# element = "c"
-# # Index range of the atom directories created by autoscript.py
-# num_start = 234
-# num_end = 481
-# # Type of NEXAFS spectrum to output
-# # 1 for total summed NEXAFS, 2 for angular, 3 for polarised, and
-# # 4 for average polarised
-# n_type = 1
-# # The theta and phi angles simulated
-# theta_angle = ["00", "25", "53", "90"]
-# phi_angle = ["60"]
-# # The element index of the excited atom all the elements in the system
-# # always the last element in the system, so if system contains H, C, Ag, C:exc
-# # it will be 4
-# atom = "3"
-
-# Start and end values of spectra
-X_START = 275.0
-X_STOP = 330.0
-# Broadening parameters for the first and last ranges
-BROAD_1 = 0.75
-BROAD_2 = 2.0
-# Energy of the lead peak
-FIRST_PEAK = 290.0
-# Set the start and end point of the linearly increasing broadening
-# change from the first and last ranges with respect to the leading
-# peak
-EWID_1 = FIRST_PEAK + 5.0
-EWID_2 = FIRST_PEAK + 15.0
-# Set the Gaussian/Lorentzian mixing ratio for the ranges
-MIX_1 = 0.2
-MIX_2 = 0.8
-
-###### SYSTEM PARAMETERS ########################################
-
-# Setting of the system being investigated
-MOLECULE = "azulene"
-METAL = "Ag"
-ELEMENT = "C"
-# Index range of the atom directories created by autoscript.py
-NUM_START = 48
-NUM_END = 57
-# Type of NEXAFS spectrum to output
-# 1 for total summed NEXAFS, 2 for angular, 3 for polarised, and
-# 4 for average polarised
-N_TYPE = 4
-# The theta and phi angles simulated
-THETA_ANGLE = ["00", "25", "53", "90"]
-PHI_ANGLE = ["60"]
-# The element index of the excited atom all the elements in the system
-# always the last element in the system, so if system contains H, C, Ag, C:exc
-# it will be 4
-ATOM = "4"
-# Whether you want to output the individual atom contributions
-ATOM_contribute = False
-
-##### SETUP ALL LIST AND VARIABLES NEEDED #######################
-
-# Create a list of all the atoms
-NUMBERS = list(range(NUM_START, NUM_END + 1))
-
-# Set up a list of all the directories all the data is in C48/, C49/... C57/
-FOLDERS = []
-for n in NUMBERS:
-    FOLDERS.append(ELEMENT + str(n) + "/")
-
-# Create variable with a string for the delta file which will be read
-FILE_NAME = "/" + MOLECULE + "_" + METAL + "_" + ATOM + "_1_1_1_deltas.dat"
-
-# Get the length of the deltas file
-BANDS = np.loadtxt(
-    ELEMENT + str(NUMBERS[0]) + "/t" + THETA_ANGLE[0] + "_p" + PHI_ANGLE[0] + FILE_NAME
-)
-BANDS_NUM = len(BANDS)
-
-# Create arrays with sizes of the system to use
-PEAKS = np.zeros([len(NUMBERS), BANDS_NUM])
-I = np.zeros([len(NUMBERS), BANDS_NUM])
+from tqdm import tqdm
 
 
-###########################################################
+def get_nexafs_data(
+    theta, phi, dirs, fname, peaks, bands, n_type, molecule, metal
+) -> tuple[np.ndarray, np.ndarray]:
+    """Parse the NEXAFS data for all theta and phi"""
+
+    print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
+    for i in tqdm(range(len(dirs))):
+        nexafs = np.loadtxt(f"{dirs[i]}t{theta}_p{phi}{fname}")
+
+        peaks[i, :] = nexafs[:, 0]
+        bands[i, :] = nexafs[:, n_type]
+
+        # Also save into a file for each atom for each theta and phi
+        # Used to plot spectra for individual atoms
+        np.savetxt(
+            f"{dirs[i]}t{theta}_p{phi}/{molecule}_{metal}_deltas_t{theta}_p{phi}.txt",
+            np.vstack((peaks[i, :], bands[i, :])).T,
+            header="# <x in eV> Intensity",
+        )
+
+    flat_peaks = peaks.flatten()
+    flat_bands = bands.flatten()
+
+    # Write out all of the data into a delta peaks file
+    np.savetxt(
+        f"{molecule}_{metal}_deltas_t{theta}_p{phi}.txt",
+        np.vstack((flat_peaks, flat_bands)).T,
+        header="# <x in eV> Intensity",
+    )
+
+    print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
+
+    return flat_peaks, flat_bands
+
+
+def _schmid_pseudo_voigt(
+    domain, m, E, omega, asymmetry=False, a=None, b=None
+) -> np.ndarray:
+    """
+    Apply broadening scheme for XPS spectra
+    https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/sia.5521
+
+    domain = linspace of x range and bin width
+    A = intensity
+    m = Gaussian-Lorentzian mixing parameter
+    E = line centre (aka dirac peak)
+    omega = full width at half maximum (omega > 0)
+    asymmetry = True or False
+    a = asymmetry parameter
+    b = asymmetry translation parameter
+    """
+
+    # if asymmetry is False:
+    # A has been omitted for performance as it will almost certainly only be set to 1
+    return (1 - m) * np.sqrt((4 * np.log(2)) / (np.pi * omega**2)) * np.exp(
+        -(4 * np.log(2) / omega**2) * (domain - E) ** 2
+    ) + m * (1 / (2 * np.pi)) * (omega / ((omega / 2) ** 2 + (domain - E) ** 2))
+
+    # else:
+    #     omega_as = 2 * omega / (1 + np.exp(-a * domain - b))
+
+    #     return A * (1 - m) * np.sqrt(
+    #         (4 * np.log(2))
+    #         / (np.pi * ((2 * omega_as) / (1 + np.exp(-a * ((domain - E) - b)))) ** 2)
+    #     ) * np.exp(
+    #         -(
+    #             4
+    #             * np.log(2)
+    #             / (2 * omega_as / (1 + np.exp(-a * ((domain - E) - b)))) ** 2
+    #         )
+    #         * (domain - E) ** 2
+    #     ) + A * m * (
+    #         1 / (2 * np.pi)
+    #     ) * (
+    #         (2 * omega_as / (1 + np.exp(-a * ((domain - E) - b))))
+    #         / (
+    #             (((2 * omega_as) / (1 + np.exp(-a * ((domain - E) - b)))) / 2) ** 2
+    #             + (domain - E) ** 2
+    #         )
+    #     )
+
+
+def broaden(
+    start,
+    stop,
+    dirac_peaks,
+    coeffs,
+    omega_1,
+    omega_2,
+    mix_1,
+    mix_2,
+    ewid_1,
+    ewid_2,
+    bin_width=0.05,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Broaden dirac delta peaks
+
+    start = beginning of x range
+    stop = end of x range
+    dirac_peaks = list of dirac delta peaks
+    coeffs =
+    omega = full width at half maximum (omega > 0)
+    mix = Gaussian-Lorentzian mixing parameter
+    ewid = x-values at which to change mix
+    eta = full width at half maximum (eta > 0)
+    """
+    domain = np.arange(start, stop, bin_width)
+    data = np.zeros([len(domain)])
+
+    if coeffs is None:
+        coeffs = np.zeros(len(dirac_peaks))
+
+    # Find the peaks in the different broadening regions
+    mic_1_trans = np.array([i for i in dirac_peaks if i <= ewid_1])
+    mic_2_trans = np.array([i for i in dirac_peaks if i > ewid_1 and i <= ewid_2])
+    # mic_3_trans = np.array([i for i in dirac_peaks if i > ewid_2])
+    m1t_len = len(mic_1_trans)
+    m2t_len = len(mic_2_trans)
+    # m3t_len = len(mic_3_trans)
+
+    sigma = np.zeros((len(dirac_peaks)))
+    mixing = np.zeros((len(dirac_peaks)))
+
+    for i in range(m1t_len):
+        sigma[i] = omega_1
+        mixing[i] = mix_1
+
+    sigma_precalc = omega_1 + ((omega_2 - omega_1) / (ewid_2 - ewid_1))
+    mix_precalc = mix_1 + (mix_2 - mix_1) / (ewid_2 - ewid_1)
+
+    for i in np.arange(m1t_len, m1t_len + m2t_len):
+        sigma[i] = sigma_precalc * (dirac_peaks[i] - ewid_1)
+        mixing[i] = mix_precalc * (dirac_peaks[i] - ewid_1)
+
+    for i in np.arange(m1t_len + m2t_len, len(dirac_peaks)):
+        sigma[i] = omega_2
+        mixing[i] = mix_2
+
+    for i in tqdm(range(len(domain))):
+        data[i] = np.sum(
+            _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+        )
+
+    return domain, data
+
+
 def main():
-    # Loop over both the theta and phi angles and the atom directories
-    for t_a in THETA_ANGLE:
-        for p_a in PHI_ANGLE:
-            for i, direc in enumerate(FOLDERS):
-                # Load the data from the MolPDOS file
-                NEX_DATA = np.loadtxt(direc + "t" + t_a + "_p" + p_a + FILE_NAME)
-                X, Y = NEX_DATA[:, 0], NEX_DATA[:, N_TYPE]
-                PEAKS[i, :] = X
-                I[i, :] = Y
-            # Write out all of the data into a delta peaks file
-            NEX_DEL_FILE = open(
-                MOLECULE + "_" + METAL + "_deltas_t" + t_a + "_p" + p_a + ".txt", "w"
+    # Initialise user-defined arrays and variables
+    # Broadening parameters
+    # Start and end values of spectra
+    start = 285.0
+    stop = 300.0
+
+    # Broadening parameters for the first and last ranges
+    omega_1 = 0.75
+    omega_2 = 2.0
+
+    # Energy of the lead peak
+    first_peak = 289.0
+
+    # Set the start and end point of the linearly increasing broadening
+    # change from the first and last ranges with respect to the leading
+    # peak
+    ewid_1 = first_peak + 5.0
+    ewid_2 = first_peak + 15.0
+
+    # Set the Gaussian/Lorentzian mixing ratio for the ranges
+    mix_1 = 0.2
+    mix_2 = 0.8
+
+    # System parameters ###
+    # Chemical system
+    molecule = "graphene"
+    metal = "Cu"
+    element = "C"
+
+    # Index range of the atom directories created by autoscript.py
+    start_atom = 248
+    end_atom = 477
+
+    # Type of NEXAFS spectrum to output
+    # 1 for total summed NEXAFS, 2 for angular, 3 for polarised, and
+    # 4 for average polarised
+    n_type = 1
+
+    # The theta and phi angles simulated
+    theta = np.array(["00", "25", "53", "90"])
+    phi = np.array(["60"])
+
+    # The element index of the excited atom all the elements in the system
+    # always the last element in the system, so if system contains H, C, Ag, C:exc
+    # it will be 4
+    atom = "3"
+
+    # Create a list of all the atoms
+    atom_ids = list(range(start_atom, end_atom + 1))
+
+    # Set up a list of all the directories all the data is in C48/, C49/... C57/
+    dirs = np.array([])
+    for n in atom_ids:
+        direc = f"{element}{str(n)}/"
+        if os.path.isdir(direc):
+            dirs = np.append(dirs, direc)
+
+    # Deltas file for each molpdos run
+    fname = f"/{molecule}_{metal}_{atom}_1_1_1_deltas.dat"
+
+    # Get the length of the deltas file
+    tmp_bands = np.loadtxt(f"{element}{str(atom_ids[0])}/t{theta[0]}_p{phi[0]}{fname}")
+    tmp_bands_l = len(tmp_bands)
+
+    # Plot spectrum for all theta and phi angles
+    for t in theta:
+        for p in phi:
+            # Create arrays with sizes of the system to use
+            peaks = np.zeros([len(atom_ids), tmp_bands_l])
+            bands = np.zeros([len(atom_ids), tmp_bands_l])
+
+            peaks, bands = get_nexafs_data(
+                t, p, dirs, fname, peaks, bands, n_type, molecule, metal
             )
-            NEX_DEL_FILE.write("#   <x in eV>     Intensity\n")
-            for p, i in zip(PEAKS.flatten(), I.flatten()):
-                NEX_DEL_FILE.write("{0:16.8f}    {1:16.8f}\n".format(p, i))
-            NEX_DEL_FILE.close()
-            # Apply the pseudovoigt broadening to the data
-            X, Y = dos_binning(
-                PEAKS.flatten(),
-                BROADENING=BROAD_1,
-                MIX_1=MIX_1,
-                MIX_2=MIX_2,
-                START=X_START,
-                STOP=X_STOP,
-                COEFFS=I.flatten(),
-                BROADENING_2=BROAD_2,
-                EWID_1=EWID_1,
-                EWID_2=EWID_2,
+
+            print(f"Broadening delta peaks for theta={t} phi={p}...")
+
+            x, y = broaden(
+                start,
+                stop,
+                peaks,
+                bands,
+                omega_1,
+                omega_2,
+                mix_1,
+                mix_2,
+                ewid_1,
+                ewid_2,
             )
-            # Write out spectrum into a text file
-            NEX_SPEC_FILE = open(
-                MOLECULE + "_" + METAL + "_spectrum_t" + t_a + "_p" + p_a + ".txt", "w"
+
+            # Write out spectrum to a text file
+            np.savetxt(
+                f"{molecule}_{metal}_spectrum_t{t}_p{p}.txt", np.vstack((x, y)).T
             )
-            for X_I, Y_I in zip(X, Y):
-                NEX_DATA = str(X_I) + " " + str(Y_I) + "\n"
-                NEX_SPEC_FILE.write(NEX_DATA)
-            NEX_SPEC_FILE.close()
-            # Calculates the individual atom contributions of the NEXAFS spectra if selected above
-            if ATOM_contribute == True:
-                XS = []
-                YS = []
-                for z in range(len(NUMBERS)):
-                    X_TMP, Y_TMP = dos_binning(
-                        PEAKS[z, :],
-                        BROADENING=BROAD_1,
-                        MIX_1=MIX_1,
-                        MIX_2=MIX_2,
-                        START=X_START,
-                        STOP=X_STOP,
-                        COEFFS=I[z, :],
-                        BROADENING_2=BROAD_2,
-                        EWID_1=EWID_1,
-                        EWID_2=EWID_2,
-                    )
-                    XS.append(X_TMP)
-                    YS.append(Y_TMP)
-
-                    ATOM_FILE = open(
-                        MOLECULE
-                        + "_"
-                        + METAL
-                        + "_"
-                        + ELEMENT
-                        + str(z)
-                        + "_t"
-                        + t_a
-                        + "_p"
-                        + p_a
-                        + ".txt",
-                        "w",
-                    )
-                    for XS_I, YS_I in zip(X_TMP, Y_TMP):
-                        ATOM_DATA = str(XS_I) + " " + str(YS_I) + "\n"
-                        ATOM_FILE.write(ATOM_DATA)
-                    ATOM_FILE.close()
 
 
-############################################################
-def gaussian(X, X_MEAN, BROADENING):
-    GAUSSIAN_VAL = np.sqrt((4 * np.log(2)) / (np.pi * (BROADENING**2))) * np.exp(
-        -((4 * np.log(2)) / (BROADENING**2)) * (X - X_MEAN) ** 2
-    )
-    return GAUSSIAN_VAL
-
-
-def lorentzian(X, X_MEAN, BROADENING):
-    LORENTZIAN_VAL = (
-        (1 / (2 * np.pi)) * (BROADENING) / (((BROADENING / 2) ** 2) + (X - X_MEAN) ** 2)
-    )
-    return LORENTZIAN_VAL
-
-
-def PseudoVoigt(X, X_MEAN, BROADENING, MIXING):
-    """
-    Combines gaussian and lorentzian schemes together
-    """
-    return (1 - MIXING) * gaussian(X, X_MEAN, BROADENING) + MIXING * lorentzian(
-        X, X_MEAN, BROADENING
-    )
-
-
-def dos_binning(
-    EIGENVALUES,
-    BROADENING=0.75,
-    BIN_WIDTH=0.01,
-    MIX_1=0.0,
-    MIX_2=None,
-    COEFFS=None,
-    START=0.0,
-    STOP=10.0,
-    BROADENING_2=None,
-    EWID_1=10.0,
-    EWID_2=20.0,
-):
-    """
-    performs binning for a given set of EIGENVALUES and
-    optionally weight COEFFS.
-    """
-    if BROADENING_2 is None:
-        BROADENING_2 = BROADENING
-    if COEFFS is None:
-        COEFFS = np.ones(len(EIGENVALUES))
-
-    LOWEST_E = START
-    HIGHEST_E = STOP
-    NUM_BINS = int((HIGHEST_E - LOWEST_E) / BIN_WIDTH)
-    X_AXIS = np.zeros([NUM_BINS])
-    data = np.zeros([NUM_BINS])
-    # setting up x-axis
-    for i in range(NUM_BINS):
-        X_AXIS[i] = LOWEST_E + i * BIN_WIDTH
-    # get DOS
-    SIGMA = np.zeros((len(EIGENVALUES)))
-    MIXING = np.zeros((len(EIGENVALUES)))
-
-    for ei, e in enumerate(EIGENVALUES):
-        if e <= (EWID_1):
-            SIGMA[ei] = BROADENING
-            MIXING[ei] = MIX_1
-        elif e > (EWID_2):
-            SIGMA[ei] = BROADENING_2
-            MIXING[ei] = MIX_2
-        else:
-            SIGMA[ei] = BROADENING + (
-                (BROADENING_2 - BROADENING) / (EWID_2 - EWID_1)
-            ) * (e - EWID_1)
-            MIXING[ei] = MIX_1 + ((MIX_2 - MIX_1) / (EWID_2 - EWID_1)) * (e - EWID_1)
-
-    for i in range(NUM_BINS):
-        PSEUDO_VOIGT_VEC = np.zeros((len(EIGENVALUES)))
-        PSEUDO_VOIGT_VEC = PseudoVoigt(X_AXIS[i], EIGENVALUES, SIGMA, MIXING) * COEFFS
-        data[i] = np.sum(PSEUDO_VOIGT_VEC)
-    return X_AXIS, data
-
-
-main()
+if __name__ == "__main__":
+    main()
