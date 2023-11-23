@@ -1,31 +1,30 @@
 #!/usr/bin/env python3
 
 import os
-import re
 
 import numpy as np
 from tqdm import tqdm
 
 
 def get_nexafs_data(
-    theta, phi, dirs, fname, peaks, bands, n_type, molecule, metal
-) -> tuple[np.ndarray, np.ndarray]:
+    theta, phi, dirs, fname, peaks, bands, n_type, molecule, metal, get_i_atom=False
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Parse the NEXAFS data for all theta and phi"""
 
     print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
-    for i in tqdm(range(len(dirs))):
+    for i in range(len(dirs)):
         nexafs = np.loadtxt(f"{dirs[i]}t{theta}_p{phi}{fname}")
-
         peaks[i, :] = nexafs[:, 0]
         bands[i, :] = nexafs[:, n_type]
 
-        # Also save into a file for each atom for each theta and phi
-        # Used to plot spectra for individual atoms
-        np.savetxt(
-            f"{dirs[i]}t{theta}_p{phi}/{molecule}_{metal}_deltas_t{theta}_p{phi}.txt",
-            np.vstack((peaks[i, :], bands[i, :])).T,
-            header="# <x in eV> Intensity",
-        )
+        if get_i_atom:  # Save each atom spectrum to a file
+            i_atom_peaks = nexafs[:, 0]
+            i_atom_bands = nexafs[:, n_type]
+            np.savetxt(
+                f"{dirs[i]}t{theta}_p{phi}/{molecule}_{metal}_deltas_t{theta}_p{phi}.txt",
+                np.vstack((i_atom_peaks, i_atom_bands)).T,
+                header="# <x in eV> Intensity",
+            )
 
     flat_peaks = peaks.flatten()
     flat_bands = bands.flatten()
@@ -39,54 +38,38 @@ def get_nexafs_data(
 
     print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
 
-    return flat_peaks, flat_bands
+    return flat_peaks, flat_bands, peaks, bands
 
 
-def _schmid_pseudo_voigt(
-    domain, m, E, omega, asymmetry=False, a=None, b=None
-) -> np.ndarray:
+def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
     """
     Apply broadening scheme for XPS spectra
     https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/sia.5521
 
     domain = linspace of x range and bin width
-    A = intensity
     m = Gaussian-Lorentzian mixing parameter
     E = line centre (aka dirac peak)
     omega = full width at half maximum (omega > 0)
-    asymmetry = True or False
-    a = asymmetry parameter
-    b = asymmetry translation parameter
     """
 
-    # if asymmetry is False:
-    # A has been omitted for performance as it will almost certainly only be set to 1
     return (1 - m) * np.sqrt((4 * np.log(2)) / (np.pi * omega**2)) * np.exp(
         -(4 * np.log(2) / omega**2) * (domain - E) ** 2
     ) + m * (1 / (2 * np.pi)) * (omega / ((omega / 2) ** 2 + (domain - E) ** 2))
 
-    # else:
-    #     omega_as = 2 * omega / (1 + np.exp(-a * domain - b))
 
-    #     return A * (1 - m) * np.sqrt(
-    #         (4 * np.log(2))
-    #         / (np.pi * ((2 * omega_as) / (1 + np.exp(-a * ((domain - E) - b)))) ** 2)
-    #     ) * np.exp(
-    #         -(
-    #             4
-    #             * np.log(2)
-    #             / (2 * omega_as / (1 + np.exp(-a * ((domain - E) - b)))) ** 2
-    #         )
-    #         * (domain - E) ** 2
-    #     ) + A * m * (
-    #         1 / (2 * np.pi)
-    #     ) * (
-    #         (2 * omega_as / (1 + np.exp(-a * ((domain - E) - b))))
-    #         / (
-    #             (((2 * omega_as) / (1 + np.exp(-a * ((domain - E) - b)))) / 2) ** 2
-    #             + (domain - E) ** 2
-    #         )
-    #     )
+def _normalise(data, domain, ewid_1, norm_val=None):
+    """Normalise spectrum such that first peak has intensity of 1."""
+
+    # Find height of first peak
+    if norm_val is None:
+        k_edge_max = np.max(data[np.where(domain <= ewid_1)])
+    else:
+        k_edge_max = norm_val
+
+    # Scale the rest of the data proportionally
+    data /= k_edge_max
+
+    return data, k_edge_max
 
 
 def broaden(
@@ -100,8 +83,10 @@ def broaden(
     mix_2,
     ewid_1,
     ewid_2,
-    bin_width=0.05,
-) -> tuple[np.ndarray, np.ndarray]:
+    bin_width=0.01,
+    with_tqdm=True,
+    norm=None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Broaden dirac delta peaks
 
@@ -116,57 +101,66 @@ def broaden(
     """
     domain = np.arange(start, stop, bin_width)
     data = np.zeros([len(domain)])
+    k_edge_last_x = 0.0
 
     if coeffs is None:
         coeffs = np.zeros(len(dirac_peaks))
 
     # Find the peaks in the different broadening regions
-    mic_1_trans = np.array([i for i in dirac_peaks if i <= ewid_1])
-    mic_2_trans = np.array([i for i in dirac_peaks if i > ewid_1 and i <= ewid_2])
-    # mic_3_trans = np.array([i for i in dirac_peaks if i > ewid_2])
-    m1t_len = len(mic_1_trans)
-    m2t_len = len(mic_2_trans)
-    # m3t_len = len(mic_3_trans)
-
     sigma = np.zeros((len(dirac_peaks)))
     mixing = np.zeros((len(dirac_peaks)))
 
-    for i in range(m1t_len):
-        sigma[i] = omega_1
-        mixing[i] = mix_1
+    sigma_precalc = (omega_2 - omega_1) / (ewid_2 - ewid_1)
+    mix_precalc = (mix_2 - mix_1) / (ewid_2 - ewid_1)
 
-    sigma_precalc = omega_1 + ((omega_2 - omega_1) / (ewid_2 - ewid_1))
-    mix_precalc = mix_1 + (mix_2 - mix_1) / (ewid_2 - ewid_1)
+    for i in range(len(dirac_peaks)):
+        if dirac_peaks[i] <= ewid_1:
+            sigma[i] = omega_1
+            mixing[i] = mix_1
+            # TODO find a better way of doing this
+            if dirac_peaks[i] <= ewid_1 - 3.0 and dirac_peaks[i] >= 1.0:
+                k_edge_last_x = dirac_peaks[i]
+        elif dirac_peaks[i] > ewid_2:
+            sigma[i] = omega_2
+            mixing[i] = mix_2
+        else:
+            sigma[i] = omega_1 + (sigma_precalc * (dirac_peaks[i] - ewid_1))
+            mixing[i] = mix_1 + (mix_precalc * (dirac_peaks[i] - ewid_1))
 
-    for i in np.arange(m1t_len, m1t_len + m2t_len):
-        sigma[i] = sigma_precalc * (dirac_peaks[i] - ewid_1)
-        mixing[i] = mix_precalc * (dirac_peaks[i] - ewid_1)
+    if with_tqdm:
+        for i in tqdm(range(len(domain))):
+            data[i] = np.sum(
+                _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+            )
 
-    for i in np.arange(m1t_len + m2t_len, len(dirac_peaks)):
-        sigma[i] = omega_2
-        mixing[i] = mix_2
+    else:
+        for i in range(len(domain)):
+            data[i] = np.sum(
+                _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+            )
 
-    for i in tqdm(range(len(domain))):
-        data[i] = np.sum(
-            _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
-        )
+    # Normalise the spectrum
+    if norm is None:
+        data, norm_val = _normalise(data, domain, k_edge_last_x)
+    else:
+        data, norm_val = _normalise(data, domain, k_edge_last_x, norm_val=norm)
 
-    return domain, data
+    return domain, data, norm_val
 
 
 def main():
     # Initialise user-defined arrays and variables
     # Broadening parameters
     # Start and end values of spectra
-    start = 285.0
-    stop = 300.0
+    start = 287.0
+    stop = 304.0
 
     # Broadening parameters for the first and last ranges
     omega_1 = 0.75
     omega_2 = 2.0
 
     # Energy of the lead peak
-    first_peak = 289.0
+    first_peak = 290.0
 
     # Set the start and end point of the linearly increasing broadening
     # change from the first and last ranges with respect to the leading
@@ -185,13 +179,13 @@ def main():
     element = "C"
 
     # Index range of the atom directories created by autoscript.py
-    start_atom = 248
-    end_atom = 477
+    start_atom = 234
+    end_atom = 454
 
     # Type of NEXAFS spectrum to output
     # 1 for total summed NEXAFS, 2 for angular, 3 for polarised, and
     # 4 for average polarised
-    n_type = 1
+    n_type = 4
 
     # The theta and phi angles simulated
     theta = np.array(["00", "25", "53", "90"])
@@ -201,6 +195,9 @@ def main():
     # always the last element in the system, so if system contains H, C, Ag, C:exc
     # it will be 4
     atom = "3"
+
+    # Plot individual atom spectra
+    plot_i_atoms = True
 
     # Create a list of all the atoms
     atom_ids = list(range(start_atom, end_atom + 1))
@@ -219,24 +216,34 @@ def main():
     tmp_bands = np.loadtxt(f"{element}{str(atom_ids[0])}/t{theta[0]}_p{phi[0]}{fname}")
     tmp_bands_l = len(tmp_bands)
 
+    # Create arrays with sizes of the system to use
+    peaks = np.zeros([len(atom_ids), tmp_bands_l])
+    bands = np.zeros([len(atom_ids), tmp_bands_l])
+
     # Plot spectrum for all theta and phi angles
     for t in theta:
         for p in phi:
-            # Create arrays with sizes of the system to use
-            peaks = np.zeros([len(atom_ids), tmp_bands_l])
-            bands = np.zeros([len(atom_ids), tmp_bands_l])
-
-            peaks, bands = get_nexafs_data(
-                t, p, dirs, fname, peaks, bands, n_type, molecule, metal
+            flat_peaks, flat_bands, peaks, bands = get_nexafs_data(
+                t,
+                p,
+                dirs,
+                fname,
+                peaks,
+                bands,
+                n_type,
+                molecule,
+                metal,
+                get_i_atom=plot_i_atoms,
             )
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
-
-            x, y = broaden(
+            print("Broadening total spectrum...")
+            # x, y = broaden(
+            x, y, norm_val = broaden(
                 start,
                 stop,
-                peaks,
-                bands,
+                flat_peaks,
+                flat_bands,
                 omega_1,
                 omega_2,
                 mix_1,
@@ -249,6 +256,35 @@ def main():
             np.savetxt(
                 f"{molecule}_{metal}_spectrum_t{t}_p{p}.txt", np.vstack((x, y)).T
             )
+
+            if plot_i_atoms:
+                print("Broadening individual atom spectra...")
+
+                for i in range(len(dirs)):
+                    print(f"Broadening atom {i+1}...")
+                    # x, y = broaden(
+                    x, y, _ = broaden(
+                        start,
+                        stop,
+                        peaks[i, :],
+                        bands[i, :],
+                        omega_1,
+                        omega_2,
+                        mix_1,
+                        mix_2,
+                        ewid_1,
+                        ewid_2,
+                        with_tqdm=False,
+                        norm=norm_val,
+                    )
+
+                    # Write out spectrum to a text file
+                    np.savetxt(
+                        f"{dirs[i]}t{t}_p{p}/{molecule}_{metal}_spectrum_t{t}_p{p}.txt",
+                        np.vstack((x, y)).T,
+                    )
+
+                print("Finished broadening individual atom spectra...")
 
 
 if __name__ == "__main__":
