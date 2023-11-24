@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import os
+from functools import partial
+from multiprocessing import Pool
 
 import numpy as np
 from tqdm import tqdm
@@ -72,7 +74,14 @@ def _normalise(data, domain, ewid_1, norm_val=None):
     return data, k_edge_max
 
 
+def _mp_broaden(domain, mixing, dirac_peaks, sigma, coeffs):
+    data = np.sum(_schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs)
+
+    return data
+
+
 def broaden(
+    n_procs,
     start,
     stop,
     dirac_peaks,
@@ -128,10 +137,25 @@ def broaden(
             mixing[i] = mix_1 + (mix_precalc * (dirac_peaks[i] - ewid_1))
 
     if with_tqdm:
-        for i in tqdm(range(len(domain))):
-            data[i] = np.sum(
-                _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+        # Parallelise in an openmp style
+        if n_procs > 1:
+            mp_func = partial(
+                _mp_broaden,
+                mixing=mixing,
+                dirac_peaks=dirac_peaks,
+                sigma=sigma,
+                coeffs=coeffs,
             )
+
+            # Not able to use tqdm with multiprocessing
+            with Pool(n_procs) as pool:
+                data = np.array(pool.map(mp_func, domain))
+
+        else:
+            for i in tqdm(range(len(domain))):
+                data[i] = np.sum(
+                    _schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma) * coeffs
+                )
 
     else:
         for i in range(len(domain)):
@@ -149,6 +173,9 @@ def broaden(
 
 
 def main():
+    # Select the number of processors to use when calculating the broadening
+    n_procs = 16
+
     # Initialise user-defined arrays and variables
     # Broadening parameters
     # Start and end values of spectra
@@ -240,6 +267,7 @@ def main():
             print("Broadening total spectrum...")
             # x, y = broaden(
             x, y, norm_val = broaden(
+                n_procs,
                 start,
                 stop,
                 flat_peaks,
@@ -264,6 +292,7 @@ def main():
                     print(f"Broadening atom {i+1}...")
                     # x, y = broaden(
                     x, y, _ = broaden(
+                        n_procs,
                         start,
                         stop,
                         peaks[i, :],
