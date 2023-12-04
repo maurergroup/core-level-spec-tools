@@ -1,10 +1,11 @@
 [tool.poetry]
 name = "core-level-spec-tools"
-version = "2.0.0"
+version = "2.0.0a0"
 description = "A collection of tools to perform core-level spectroscopy simulations in CASTEP"
-authors = ["Dylan Morgan <dbmorgan98@gmail.com>"]
+authors = ["Dylan Morgan <dylan.morgan@warwick.ac.uk>"]
 license = "GPL 3"
 readme = "README.md"
+packages = [{ include = "castep" }]
 
 [tool.poetry.dependencies]
 python = ">=3.9, <3.13"
@@ -12,6 +13,10 @@ numpy = "^1.26.2"
 matplotlib = "^3.8.2"
 tqdm = "^4.66.1"
 click = "^8.1.7"
+
+[tool.poetry.scripts]
+nexafs = 'castep.nexafs:nexafs'
+molpdos = 'castep.execute_molpdos.sh'
 
 
 [build-system]
