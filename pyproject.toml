@@ -15,8 +15,8 @@ tqdm = "^4.66.1"
 click = "^8.1.7"
 
 [tool.poetry.scripts]
-nexafs = 'castep.nexafs:nexafs'
-molpdos = 'castep.execute_molpdos.sh'
+nexafs = "castep.nexafs:nexafs"
+molpdos = "castep.execute_molpdos:run"
 
 
 [build-system]

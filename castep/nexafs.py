@@ -3,8 +3,10 @@
 import os
 from functools import lru_cache, partial
 from multiprocessing import Pool
+from typing import List, Tuple
 
 import click
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
@@ -205,7 +207,7 @@ class Nexafs:
 
     @staticmethod
     @lru_cache(maxsize=128)
-    def schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
+    def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
         """
         Apply broadening scheme for XPS spectra. See the following reference for more details:
         https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/sia.5521
@@ -232,7 +234,7 @@ class Nexafs:
         ) + m * (1 / (2 * np.pi)) * (omega / ((omega / 2) ** 2 + (domain - E) ** 2))
 
     @staticmethod
-    def normalise(data, domain, ewid_1, norm_val=None) -> tuple[np.ndarray, float]:
+    def _normalise(data, domain, ewid_1, norm_val=None) -> tuple[np.ndarray, float]:
         """
         Normalise spectrum such that first peak has intensity of 1.
 
@@ -268,7 +270,7 @@ class Nexafs:
         return data, k_edge_max
 
     @staticmethod
-    def mp_broaden(domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
+    def _mp_broaden(domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
         """
         Perform the broadening in parallel.
 
@@ -291,13 +293,13 @@ class Nexafs:
                 broadened spectrum
         """
         data = np.sum(
-            Nexafs.schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
+            Nexafs._schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
         )
 
         return data
 
     @staticmethod
-    def sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
+    def _sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
         """
         Perform the broadening in serial.
 
@@ -323,7 +325,7 @@ class Nexafs:
         """
         for i in tqdm(range(len(domain))):
             data[i] = np.sum(
-                Nexafs.schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
+                Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
                 * coeffs
             )
 
@@ -396,7 +398,7 @@ class Nexafs:
             # Parallelise in an openmp style
             if self.n_procs > 1:
                 mp_func = partial(
-                    Nexafs.mp_broaden,
+                    Nexafs._mp_broaden,
                     mixing=mixing,
                     dirac_peaks=dirac_peaks,
                     sigma=sigma,
@@ -408,26 +410,166 @@ class Nexafs:
                     data = np.array(pool.map(mp_func, domain))
 
             else:
-                data = Nexafs.sp_broaden(
+                data = Nexafs._sp_broaden(
                     data, domain, mixing, dirac_peaks, sigma, coeffs
                 )
 
         else:
-            data = Nexafs.sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs)
+            data = Nexafs._sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs)
 
         # Normalise the spectrum
         if norm is None:
-            data, norm_val = Nexafs.normalise(data, domain, k_edge_last_x)
+            data, norm_val = Nexafs._normalise(data, domain, k_edge_last_x)
             # norm_val = 1
             # print("Not normalising")
         else:
-            data, norm_val = Nexafs.normalise(
+            data, norm_val = Nexafs._normalise(
                 data, domain, k_edge_last_x, norm_val=norm
             )
             # norm_val = 1
             # print("Not normalising")
 
         return domain, data, norm_val
+
+    @staticmethod
+    def _plot(angle, path, label, colour=None) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Private method to parse NEXAFS data and add to mpl graph.
+
+        Parameters
+        ----------
+            angle : str
+                angle of the spectrum
+            path : str
+                path to the data
+            label : str
+                label to use for theplot
+            colour : str
+                colour of the plotted line
+
+        Returns
+        -------
+            x : np.ndarray
+                energy values of broadened spectrum
+            y : np.ndarray
+                intensity values of broadened spectrum
+        """
+        x, y = np.loadtxt(
+            f"{path}/graphene_Cu_spectrum_{angle}.txt", usecols=(0, 1), unpack=True
+        )
+
+        plt.plot(x, y, c=colour, label=label)
+
+        return x, y
+
+    def atom_contribution_plot(
+        self,
+        deltas: List[str],
+        cmap="plasma",
+        reversed_cmap=True,
+        lower_cmap_range=0.1,
+        upper_cmap_range=1.0,
+        mpl_figsize: Tuple[float, float] = (8.0, 5.0),
+    ) -> None:
+        """
+        Save a figure of the broadened spectra with individual atom contributions.
+
+        Parameters
+        ----------
+            deltas : List[str]
+                list of x-ray incidence angles
+            cmap : str
+                colour map to use for invdividual atom contributions in the plot
+            reversed_cmap : bool
+                whether to reverse the colour map
+            lower_cmap_range : float
+                normalised lower bound colour of the colour map
+            upper_cmap_range : float
+                normalised upper bound colour of the colour map
+            mpl_figsize : Tuple[float, float]
+                size of the saved figure
+        """
+        # Set the saved figure size
+        plt.rcParams["figure.figsize"] = mpl_figsize
+
+        # Reverse the colour map
+        if reversed_cmap:
+            cmap = plt.get_cmap(cmap).reversed()
+        else:
+            cmap = plt.get_cmap(cmap)
+
+        # Plot the spectra for all the theta and phi angles
+        for i in deltas:
+            for j, c in zip(
+                self.dirs,
+                np.linspace(lower_cmap_range, upper_cmap_range, len(self.dirs)),
+            ):
+                self._plot(i, f"{j}{i}", j[:-1], cmap(c))
+
+            x, _ = self._plot(i, "./", "Total Spectrum", "black")
+            plt.xticks(np.arange(min(x), max(x) + 1, 2))
+            plt.ylabel("Normalised Intensity")
+            plt.xlabel("Energy (eV)")
+            plt.tight_layout()
+            plt.legend()
+
+            plt.savefig(f"spectrum_{i}.png")
+            print(f"Plotted {i}")
+
+            plt.figure().clear()
+
+    def multi_angle_plot(
+        self,
+        deltas: List[str],
+        cmap="plasma",
+        reversed_cmap=False,
+        lower_cmap_range=0.1,
+        upper_cmap_range=1.0,
+        mpl_figsize: Tuple[float, float] = (8.0, 5.0),
+    ) -> None:
+        """
+        Save a figure of the broadened spectra overlayed with spectra angles.
+
+        Parameters
+        ----------
+            deltas : List[str]
+                list of x-ray incidence angles
+            cmap : str
+                colour map to use for different angles in the plot
+            reversed_cmap : bool
+                whether to reverse the colour map
+            lower_cmap_range : float
+                normalised lower bound colour of the colour map
+            upper_cmap_range : float
+                normalised upper bound colour of the colour map
+            mpl_figsize : Tuple[float, float]
+                size of the saved figure
+        """
+
+        plt.rcParams["figure.figsize"] = mpl_figsize
+        x_vals = np.array([])
+        x = np.array([])  # Ensure x is bound
+
+        # Reverse the colour map
+        if reversed_cmap:
+            cmap = plt.get_cmap(cmap).reversed()
+        else:
+            cmap = plt.get_cmap(cmap)
+
+        for delta, c in zip(
+            deltas, np.linspace(lower_cmap_range, upper_cmap_range, len(deltas))
+        ):
+            x, _ = Nexafs._plot(delta, "./", rf"$\theta = {delta[1:3]}$", cmap(c))
+            x_vals = np.concatenate((x_vals, x))
+
+        plt.xticks(np.arange(min(x), max(x) + 1, 2))
+        plt.ylabel("Intensity")
+        plt.xlabel("Energy (eV)")
+        plt.tight_layout()
+        plt.legend()
+
+        plt.savefig("spectrum_angles.png")
+        print("Plotted angles")
 
 
 def main(
@@ -448,7 +590,9 @@ def main(
     phi,
     theta,
     excited_nth_element,
-    plot_i_atoms,
+    get_i_atoms,
+    atom_contribution_plot,
+    multi_angle_plot,
 ):
     nexafs = Nexafs(
         n_procs,
@@ -468,67 +612,52 @@ def main(
         phi,
         theta,
         excited_nth_element,
-        plot_i_atoms,
+        get_i_atoms,
     )
 
     # Plot spectrum for all theta and phi angles
     for t in theta:
         for p in phi:
             flat_peaks, flat_bands, peaks, bands = nexafs.get_nexafs_data(
-                get_i_atom=plot_i_atoms
+                get_i_atom=get_i_atoms
             )
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
             print("Broadening total spectrum...")
-            # x, y = broaden(
-            x, y, norm_val = broaden(
-                n_procs,
-                start,
-                stop,
-                flat_peaks,
-                flat_bands,
-                omega_1,
-                omega_2,
-                mix_1,
-                mix_2,
-                ewid_1,
-                ewid_2,
-            )
+            x, y, norm_val = nexafs.broaden(flat_peaks, flat_bands)
 
             # Write out spectrum to a text file
             np.savetxt(
-                f"{molecule}_{metal}_spectrum_t{t}_p{p}.txt", np.vstack((x, y)).T
+                f"{molecule}_{surface}_spectrum_t{t}_p{p}.txt", np.vstack((x, y)).T
             )
 
-            if plot_i_atoms:
+            if get_i_atoms:
                 print("Broadening individual atom spectra...")
 
-                for i in range(len(dirs)):
+                for i in range(len(nexafs.dirs)):
                     print(f"Broadening atom {i+1}...")
-                    # x, y = broaden(
-                    x, y, _ = broaden(
-                        n_procs,
-                        start,
-                        stop,
+                    x, y, _ = nexafs.broaden(
                         peaks[i, :],
                         bands[i, :],
-                        omega_1,
-                        omega_2,
-                        mix_1,
-                        mix_2,
-                        ewid_1,
-                        ewid_2,
                         with_tqdm=False,
                         norm=norm_val,
                     )
 
                     # Write out spectrum to a text file
                     np.savetxt(
-                        f"{dirs[i]}t{t}_p{p}/{molecule}_{metal}_spectrum_t{t}_p{p}.txt",
+                        f"{nexafs.dirs[i]}t{t}_p{p}/{molecule}_{surface}_spectrum_t{t}_p{p}.txt",
                         np.vstack((x, y)).T,
                     )
 
                 print("Finished broadening individual atom spectra...")
+
+    # Plot individual atom contributions
+    if atom_contribution_plot:
+        nexafs.atom_contribution_plot([f"t{t}_p{p}" for t in theta for p in phi])
+
+    # Plot total spectrum for all angles
+    if multi_angle_plot:
+        nexafs.multi_angle_plot([f"t{t}_p{p}" for t in theta for p in phi])
 
 
 @click.command()
@@ -634,12 +763,28 @@ def main(
     " it will be 3",
 )
 @click.option(
-    "-p",
-    "--plot_i_atoms",
+    "-g",
+    "--get_i_atoms",
+    is_flag=True,
+    default=False,
+    type=bool,
+    help="parse and broaden the individual atom spectra",
+)
+@click.option(
+    "-c",
+    "--atom_contribution_plot",
     is_flag=True,
     default=True,
     type=bool,
-    help="plot individual atom spectra",
+    help="plot atom contributions to the total spectrum",
+)
+@click.option(
+    "-m",
+    "--multi_angle_plot",
+    is_flag=True,
+    default=True,
+    type=bool,
+    help="plot the total spectrum for all angles",
 )
 def nexafs(
     n_procs,
@@ -659,7 +804,9 @@ def nexafs(
     phi,
     theta,
     excited_nth_element,
-    plot_i_atoms,
+    get_i_atoms,
+    atom_contribution_plot,
+    multi_angle_plot,
 ):
     """
     A tool for simulating NEXAFS spectra for surfaces from CASTEP calculations.
@@ -684,7 +831,9 @@ def nexafs(
         phi,
         theta,
         excited_nth_element,
-        plot_i_atoms,
+        get_i_atoms,
+        atom_contribution_plot,
+        multi_angle_plot,
     )
 
 
