@@ -735,7 +735,7 @@ def main(
     "-i2", "--index_end", required=True, type=int, help="index of the last excited atom"
 )
 @click.option(
-    "-s",
+    "-y",
     "--spectrum_type",
     default="avg_polarised",
     type=click.Choice(["tot_summed", "angular", "polarised", "avg_polarised"]),
