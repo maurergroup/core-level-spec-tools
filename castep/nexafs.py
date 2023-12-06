@@ -758,6 +758,7 @@ def main(
     "--excited_nth_element",
     default=3,
     type=int,
+    show_default=True,
     help="the element index of the excited atom of all the elements in the system - this"
     " will always be the last element in the system, so if system contains C, Cu, C:exc"
     " it will be 3",
@@ -768,6 +769,7 @@ def main(
     is_flag=True,
     default=False,
     type=bool,
+    show_default=True,
     help="parse and broaden the individual atom spectra",
 )
 @click.option(
@@ -776,6 +778,7 @@ def main(
     is_flag=True,
     default=True,
     type=bool,
+    show_default=True,
     help="plot atom contributions to the total spectrum",
 )
 @click.option(
@@ -784,6 +787,7 @@ def main(
     is_flag=True,
     default=True,
     type=bool,
+    show_default=True,
     help="plot the total spectrum for all angles",
 )
 def nexafs(
