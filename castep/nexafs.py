@@ -74,6 +74,7 @@ class Nexafs:
             plot_i_atoms : bool
                 plot individual atom spectra
         """
+
         # Number of processors to use
         self.n_procs = n_procs
 
@@ -108,10 +109,6 @@ class Nexafs:
         )
         self.n_type = np.where(spectrum_type_opts == spectrum_type)[0][0] + 1
 
-        # Convert phi and theta to numpy arrays
-        self.phi = np.array(phi)
-        self.theta = np.array(theta)
-
         self.atom = excited_nth_element
         self.plot_i_atoms = plot_i_atoms
 
@@ -136,7 +133,7 @@ class Nexafs:
 
         # Get the length of the deltas file
         tmp_bands = np.loadtxt(
-            f"{self.element}{str(atom_ids[0])}/t{self.theta[0]}_p{self.phi[0]}{self.fname}"
+            f"{self.element}{str(atom_ids[0])}/t{theta[0]}_p{phi[0]}{self.fname}"
         )
         tmp_bands_l = len(tmp_bands)
 
@@ -146,6 +143,8 @@ class Nexafs:
 
     def get_nexafs_data(
         self,
+        theta,
+        phi,
         get_i_atom=False,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -172,9 +171,9 @@ class Nexafs:
                 array of Dirac peak intensities
         """
 
-        print(f"Parsing NEXAFS data for self.theta={self.theta} self.phi={self.phi}...")
+        print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
         for i in range(len(self.dirs)):
-            nexafs = np.loadtxt(f"{self.dirs[i]}t{self.theta}_p{self.phi}{self.fname}")
+            nexafs = np.loadtxt(f"{self.dirs[i]}t{theta}_p{phi}{self.fname}")
             self.peaks[i, :] = nexafs[:, 0]
             self.bands[i, :] = nexafs[:, self.n_type]
 
@@ -182,8 +181,8 @@ class Nexafs:
                 i_atom_peaks = nexafs[:, 0]
                 i_atom_bands = nexafs[:, self.n_type]
                 np.savetxt(
-                    f"{self.dirs[i]}t{self.theta}_p{self.phi}/{self.molecule}_"
-                    f"{self.metal}_deltas_t{self.theta}_p{self.phi}.txt",
+                    f"{self.dirs[i]}t{theta}_p{phi}/{self.molecule}_"
+                    f"{self.metal}_deltas_t{theta}_p{phi}.txt",
                     np.vstack((i_atom_peaks, i_atom_bands)).T,
                     header="# <x in eV> Intensity",
                 )
@@ -193,14 +192,12 @@ class Nexafs:
 
         # Write out all of the data into a delta peaks file
         np.savetxt(
-            f"{self.molecule}_{self.metal}_deltas_t{self.theta}_p{self.phi}.txt",
+            f"{self.molecule}_{self.metal}_deltas_t{theta}_p{phi}.txt",
             np.vstack((flat_peaks, flat_bands)).T,
             header="# <x in eV> Intensity",
         )
 
-        print(
-            f"Finished writing out delta peaks file for theta={self.theta} phi={self.phi}"
-        )
+        print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
 
         return flat_peaks, flat_bands, self.peaks, self.bands
 
@@ -291,6 +288,7 @@ class Nexafs:
             data : np.ndarray
                 broadened spectrum
         """
+
         data = np.sum(
             Nexafs._schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
         )
@@ -322,6 +320,7 @@ class Nexafs:
             data : np.ndarray
                 broadened spectrum
         """
+
         for i in tqdm(range(len(domain))):
             data[i] = np.sum(
                 Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
@@ -363,6 +362,7 @@ class Nexafs:
             norm_val : float
                 value used to normalise the spectrum
         """
+
         domain = np.arange(self.start, self.stop, bin_width)
         data = np.zeros([len(domain)])
         k_edge_last_x = 0.0
@@ -453,6 +453,7 @@ class Nexafs:
             y : np.ndarray
                 intensity values of broadened spectrum
         """
+
         x, y = np.loadtxt(
             f"{path}/graphene_Cu_spectrum_{angle}.txt", usecols=(0, 1), unpack=True
         )
@@ -488,6 +489,7 @@ class Nexafs:
             mpl_figsize : Tuple[float, float]
                 size of the saved figure
         """
+
         # Set the saved figure size
         plt.rcParams["figure.figsize"] = mpl_figsize
 
@@ -618,7 +620,7 @@ def main(
     for t in theta:
         for p in phi:
             flat_peaks, flat_bands, peaks, bands = nexafs.get_nexafs_data(
-                get_i_atom=get_i_atoms
+                t, p, get_i_atom=get_i_atoms
             )
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
@@ -816,6 +818,7 @@ def nexafs(
 
     Copyright \u00A9 2023-2024, Dylan Morgan dylan.morgan@warwick.ac.uk
     """
+
     main(
         n_procs,
         begin,
