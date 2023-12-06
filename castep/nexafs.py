@@ -310,7 +310,9 @@ class Nexafs:
         return data
 
     @staticmethod
-    def _sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
+    def _sp_broaden(
+        data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
+    ) -> np.ndarray:
         """
         Perform the broadening in serial.
 
@@ -328,6 +330,8 @@ class Nexafs:
                 linearly interpolated full width at half maximum
             coeffs : np.ndarray
                 Dirac peak intensities
+            with_tqdm : bool
+                whether to use tqdm to show progress of broadening
 
         Returns
         -------
@@ -335,11 +339,19 @@ class Nexafs:
                 broadened spectrum
         """
 
-        for i in tqdm(range(len(domain))):
-            data[i] = np.sum(
-                Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
-                * coeffs
-            )
+        if with_tqdm:
+            for i in tqdm(range(len(domain))):
+                data[i] = np.sum(
+                    Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
+                    * coeffs
+                )
+
+        else:
+            for i in range(len(domain)):
+                data[i] = np.sum(
+                    Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
+                    * coeffs
+                )
 
         return data
 
@@ -422,27 +434,29 @@ class Nexafs:
                 with Pool(self.n_procs) as pool:
                     data = np.array(pool.map(mp_func, domain))
 
-            # I think this is redundant
-            # else:
-            #     data = Nexafs._sp_broaden(
-            #         data, domain, mixing, dirac_peaks, sigma, coeffs
-            #     )
+            # TODO I think this is redundant
+            else:
+                data = Nexafs._sp_broaden(
+                    data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
+                )
 
         else:
-            data = Nexafs._sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs)
+            data = Nexafs._sp_broaden(
+                data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=False
+            )
 
         # TODO Figure out how to normalise when first peak doesn't exist
         # Normalise the spectrum
         if norm is None:
             # data, norm_val = Nexafs._normalise(data, domain, k_edge_last_x)
             norm_val = 1
-            print("Not normalising")
+            # print("Not normalising")
         else:
             # data, norm_val = Nexafs._normalise(
             #     data, domain, k_edge_last_x, norm_val=norm
             # )
             norm_val = 1
-            print("Not normalising")
+            # print("Not normalising")
 
         return domain, data, norm_val
 
@@ -656,8 +670,7 @@ def main(
             if get_i_atoms:
                 print("Broadening individual atom spectra...")
 
-                for i in range(len(nexafs.dirs)):
-                    print(f"Broadening atom {i+1}...")
+                for i in tqdm(range(len(nexafs.dirs))):
                     x, y, _ = nexafs.broaden(
                         peaks[i, :],
                         bands[i, :],
