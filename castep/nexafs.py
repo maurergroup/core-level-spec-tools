@@ -215,7 +215,7 @@ class Nexafs:
 
         return flat_peaks, flat_bands, self.peaks, self.bands
 
-    @lru_cache(maxsize=128)
+    # @lru_cache(maxsize=128)
     @staticmethod
     def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
         """
