@@ -665,7 +665,7 @@ def main(
     "-n",
     "--nprocs",
     default=1,
-    type=bool,
+    type=int,
     show_default=True,
     help="number of processors to use",
 )
