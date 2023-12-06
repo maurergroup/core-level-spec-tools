@@ -782,7 +782,7 @@ def main(
     help="plot atom contributions to the total spectrum",
 )
 @click.option(
-    "-m",
+    "-l",
     "--multi_angle_plot",
     is_flag=True,
     default=True,
