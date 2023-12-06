@@ -141,6 +141,20 @@ class Nexafs:
         self.peaks = np.zeros([len(atom_ids), tmp_bands_l])
         self.bands = np.zeros([len(atom_ids), tmp_bands_l])
 
+    def check_prev_broadening(self, theta, phi) -> bool:
+        """
+        Check if broadened deltas files already exist.
+
+        Returns
+        -------
+            True if broadened deltas files exist, False otherwise
+        """
+
+        if os.path.isfile(f"{self.molecule}_{self.metal}_deltas_t{theta}_p{phi}.txt"):
+            return True
+        else:
+            return False
+
     def get_nexafs_data(
         self,
         theta,
@@ -201,8 +215,8 @@ class Nexafs:
 
         return flat_peaks, flat_bands, self.peaks, self.bands
 
-    @staticmethod
     @lru_cache(maxsize=128)
+    @staticmethod
     def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
         """
         Apply broadening scheme for XPS spectra. See the following reference for more details:
@@ -408,25 +422,27 @@ class Nexafs:
                 with Pool(self.n_procs) as pool:
                     data = np.array(pool.map(mp_func, domain))
 
-            else:
-                data = Nexafs._sp_broaden(
-                    data, domain, mixing, dirac_peaks, sigma, coeffs
-                )
+            # I think this is redundant
+            # else:
+            #     data = Nexafs._sp_broaden(
+            #         data, domain, mixing, dirac_peaks, sigma, coeffs
+            #     )
 
         else:
             data = Nexafs._sp_broaden(data, domain, mixing, dirac_peaks, sigma, coeffs)
 
+        # TODO Figure out how to normalise when first peak doesn't exist
         # Normalise the spectrum
         if norm is None:
-            data, norm_val = Nexafs._normalise(data, domain, k_edge_last_x)
-            # norm_val = 1
-            # print("Not normalising")
+            # data, norm_val = Nexafs._normalise(data, domain, k_edge_last_x)
+            norm_val = 1
+            print("Not normalising")
         else:
-            data, norm_val = Nexafs._normalise(
-                data, domain, k_edge_last_x, norm_val=norm
-            )
-            # norm_val = 1
-            # print("Not normalising")
+            # data, norm_val = Nexafs._normalise(
+            #     data, domain, k_edge_last_x, norm_val=norm
+            # )
+            norm_val = 1
+            print("Not normalising")
 
         return domain, data, norm_val
 
@@ -619,6 +635,11 @@ def main(
     # Plot spectrum for all theta and phi angles
     for t in theta:
         for p in phi:
+            # Check if deltas files already exist
+            if nexafs.check_prev_broadening(t, p):
+                print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
+                continue
+
             flat_peaks, flat_bands, peaks, bands = nexafs.get_nexafs_data(
                 t, p, get_i_atom=get_i_atoms
             )
@@ -769,7 +790,6 @@ def main(
     "--get_i_atoms",
     is_flag=True,
     default=False,
-    type=bool,
     show_default=True,
     help="parse and broaden the individual atom spectra",
 )
@@ -777,8 +797,7 @@ def main(
     "-c",
     "--atom_contribution_plot",
     is_flag=True,
-    default=True,
-    type=bool,
+    default=False,
     show_default=True,
     help="plot atom contributions to the total spectrum",
 )
@@ -786,8 +805,7 @@ def main(
     "-l",
     "--multi_angle_plot",
     is_flag=True,
-    default=True,
-    type=bool,
+    default=False,
     show_default=True,
     help="plot the total spectrum for all angles",
 )
