@@ -663,7 +663,7 @@ def main(
 @click.command()
 @click.option(
     "-n",
-    "--nprocs",
+    "--n_procs",
     default=1,
     type=int,
     show_default=True,
