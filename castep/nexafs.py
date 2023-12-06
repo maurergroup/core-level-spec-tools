@@ -3,7 +3,6 @@
 import os
 from functools import lru_cache, partial
 from multiprocessing import Pool
-from typing import List, Tuple
 
 import click
 import matplotlib.pyplot as plt
@@ -464,19 +463,19 @@ class Nexafs:
 
     def atom_contribution_plot(
         self,
-        deltas: List[str],
+        deltas: list[str],
         cmap="plasma",
         reversed_cmap=True,
         lower_cmap_range=0.1,
         upper_cmap_range=1.0,
-        mpl_figsize: Tuple[float, float] = (8.0, 5.0),
+        mpl_figsize: tuple[float, float] = (8.0, 5.0),
     ) -> None:
         """
         Save a figure of the broadened spectra with individual atom contributions.
 
         Parameters
         ----------
-            deltas : List[str]
+            deltas : list[str]
                 list of x-ray incidence angles
             cmap : str
                 colour map to use for invdividual atom contributions in the plot
@@ -520,19 +519,19 @@ class Nexafs:
 
     def multi_angle_plot(
         self,
-        deltas: List[str],
+        deltas: list[str],
         cmap="plasma",
         reversed_cmap=False,
         lower_cmap_range=0.1,
         upper_cmap_range=1.0,
-        mpl_figsize: Tuple[float, float] = (8.0, 5.0),
+        mpl_figsize: tuple[float, float] = (8.0, 5.0),
     ) -> None:
         """
         Save a figure of the broadened spectra overlayed with spectra angles.
 
         Parameters
         ----------
-            deltas : List[str]
+            deltas : list[str]
                 list of x-ray incidence angles
             cmap : str
                 colour map to use for different angles in the plot
@@ -743,13 +742,13 @@ def main(
     help="type of spectrum to plot",
 )
 @click.option(
-    "-p", "--phi", default=[60], type=list, show_default=True, help="phi angles"
+    "-p", "--phi", default=["60"], type=list[str], show_default=True, help="phi angles"
 )
 @click.option(
     "-t",
     "--theta",
-    default=[0, 25, 53, 90],
-    type=list,
+    default=["00", "25", "53", "90"],
+    type=list[str],
     show_default=True,
     help="theta angles",
 )
