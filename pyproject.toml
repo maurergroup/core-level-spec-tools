@@ -16,7 +16,7 @@ click = "^8.1.7"
 
 [tool.poetry.scripts]
 nexafs = "castep.nexafs:nexafs"
-molpdos = "castep.execute_molpdos:run"
+molpdos = "castep.execute_molpdos:molpdos"
 
 
 [build-system]

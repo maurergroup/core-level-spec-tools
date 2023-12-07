@@ -12,7 +12,7 @@ metal="Cu"
 element="C"
 
 # Get the atom directories
-Array=( $(ls -d $element???) )
+Array=( "$(ls -d $element???)" )
 
 ###### GET XPS BINDING ENERGIES #####################################
 
@@ -24,8 +24,8 @@ readarray -t XPSArray <../XPS/${element}_XPS_peaks.txt
 
 # Search through all the atom directories and add the XPS energy to each of the .molpdos file
 for i in "${!Array[@]}"; do (
-  cd "${Array[i]}"
-  sed -i "s/nexafs_xshift        :  [0-9]*.[0-9]*/nexafs_xshift        :  ${XPSArray[i]}/g" ${system}.molpdos >>${system}.molpdos
+  cd "${Array[i]}" || exit
+  sed -i "s/nexafs_xshift        :  [0-9]*.[0-9]*/nexafs_xshift        :  ${XPSArray[i]}/g" ${system}.molpdos
 ) done
 
 ###### RUN MOLPDOS ######################################################
@@ -35,13 +35,13 @@ for atom in "${Array[@]}"; do (
   echo "$atom"
   for theta in "${ThetaArray[@]}"; do (
     for phi in "${PhiArray[@]}"; do (
-      cd $atom || continue
+      cd "$atom" || continue
       echo "$atom" t"$theta" p"$phi"
       mkdir t"${theta}"_p"$phi"
-      sed -i "s/nexafs_phi           :   [0-9]*/nexafs_phi           :   $phi/g" ${system}.molpdos >>${system}.molpdos
-      sed -i "s/nexafs_theta         :   [0-9]*/nexafs_theta         :   $theta/g" ${system}.molpdos >>${system}.molpdos
+      sed -i "s/nexafs_phi           :   [0-9]*/nexafs_phi           :   $phi/g" ${system}.molpdos
+      sed -i "s/nexafs_theta         :   [0-9]*/nexafs_theta         :   $theta/g" ${system}.molpdos
       MolPDOS $system
-      mv *.dat t"${theta}"_p"$phi"
+      mv ./*.dat t"${theta}"_p"$phi"
       echo "$atom" t"$theta" p"$phi" "done"
     ) done
   ) done
