@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "core-level-spec-tools"
-version = "2.0.0a0"
+version = "2.1.0a0"
 description = "A collection of tools to perform core-level spectroscopy simulations in CASTEP"
 authors = ["Dylan Morgan <dylan.morgan@warwick.ac.uk>"]
 license = "GPL 3"
