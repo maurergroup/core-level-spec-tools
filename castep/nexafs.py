@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from functools import lru_cache, partial
+from functools import partial
 from multiprocessing import Pool
 
 import click
@@ -215,7 +215,7 @@ class Nexafs:
 
         return flat_peaks, flat_bands, self.peaks, self.bands
 
-    # @lru_cache(maxsize=128)
+    # TODO: implement @lru_cache(maxsize=128)
     @staticmethod
     def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
         """
@@ -266,8 +266,8 @@ class Nexafs:
             k_edge_max : float
                 maximum intensity of the first peak
         """
-        # TODO: Change norm_val/k_edge_max to use getter/setter methods
 
+        # TODO: Change norm_val/k_edge_max to use getter/setter methods
         # Find height of first peak
         if norm_val is None:
             k_edge_max = np.max(data[np.where(domain <= ewid_1)])
@@ -391,7 +391,7 @@ class Nexafs:
 
         domain = np.arange(self.start, self.stop, bin_width)
         data = np.zeros([len(domain)])
-        k_edge_last_x = 0.0
+        # k_edge_last_x = 0.0
 
         if coeffs is None:
             coeffs = np.zeros(len(dirac_peaks))
@@ -408,8 +408,8 @@ class Nexafs:
                 sigma[i] = self.omega_1
                 mixing[i] = self.mix_1
                 # TODO find a better way of doing this
-                if dirac_peaks[i] <= self.ewid_1 - 3.0 and dirac_peaks[i] >= 1.0:
-                    k_edge_last_x = dirac_peaks[i]
+                # if dirac_peaks[i] <= self.ewid_1 - 3.0 and dirac_peaks[i] >= 1.0:
+                #     k_edge_last_x = dirac_peaks[i]
             elif dirac_peaks[i] > self.ewid_2:
                 sigma[i] = self.omega_2
                 mixing[i] = self.mix_2
@@ -539,7 +539,8 @@ class Nexafs:
 
             x, _ = self._plot(i, "./", "Total Spectrum", "black")
             plt.xticks(np.arange(min(x), max(x) + 1, 2))
-            plt.ylabel("Normalised Intensity")
+            # plt.ylabel("Normalised Intensity")
+            plt.ylabel("Intensity")
             plt.xlabel("Energy (eV)")
             plt.tight_layout()
             plt.legend()
@@ -872,7 +873,3 @@ def nexafs(
         atom_contribution_plot,
         multi_angle_plot,
     )
-
-
-if __name__ == "__main__":
-    nexafs()
