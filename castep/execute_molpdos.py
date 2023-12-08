@@ -76,7 +76,7 @@ def main(phi, theta, molecule, surface, excited_atom):
     phi_b = " ".join(phi)
     theta_b = " ".join(theta)
 
-    return os.system(
+    os.system(
         f"{os.path.dirname(os.path.realpath(__file__))}/execute_molpdos.sh "
         f"{phi_b} {theta_b} {molecule} {surface} {excited_atom}"
     )
