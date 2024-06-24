@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import os
+from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
+from typing import Annotated, Literal
 
 import click
 import matplotlib.pyplot as plt
@@ -11,27 +13,36 @@ import numpy.typing as npt
 from tqdm import tqdm
 
 
+@dataclass
+class GreaterThan:
+    """
+    Represent a value greater than a given value.
+    """
+
+    min: float
+
+
 class NEXAFS:
     def __init__(
         self,
-        n_procs,
-        begin,
-        end,
-        initial_peak,
-        omega_1,
-        omega_2,
-        mix_1,
-        mix_2,
-        molecule,
-        surface,
-        excited_atom,
-        index_start,
-        index_end,
-        spectrum_type,
-        phi,
-        theta,
-        excited_nth_element,
-        plot_i_atoms,
+        n_procs: int,
+        begin: float,
+        end: float,
+        initial_peak: float,
+        omega_1: float,
+        omega_2: float,
+        mix_1: float,
+        mix_2: float,
+        molecule: str,
+        surface: str,
+        excited_atom: str,
+        index_start: int,
+        index_end: int,
+        spectrum_type: Literal["tot_summed", "angular", "polarised", "avg_polarised"],
+        phi: list[str],
+        theta: list[str],
+        excited_nth_element: int,
+        plot_i_atoms: bool,
     ):
         """
         Parameters
@@ -62,11 +73,11 @@ class NEXAFS:
             index of the first excited atom
         index_end : int
             index of the last excited atom
-        spectrum_type : str
+        spectrum_type : Literal["tot_summed", "angular", "polarised", "avg_polarised"]
             type of spectrum to plot
-        phi : list
+        phi : list[str]
             phi angles
-        theta : list
+        theta : list[str]
             theta angles
         excited_nth_element : int
             the element index of the excited atom of all the elements in the system
@@ -85,7 +96,6 @@ class NEXAFS:
         self.stop = end
 
         # Energy of the lead peak
-        self.first_peak = initial_peak
         self.omega_1 = omega_1
         self.omega_2 = omega_2
         self.mix_1 = mix_1
@@ -105,10 +115,8 @@ class NEXAFS:
         # Type of NEXAFS spectrum to output
         # 1 for total summed NEXAFS, 2 for angular, 3 for polarised, and 4 for
         # average polarised
-        spectrum_type_opts = np.array(
-            ["tot_summed", "angular", "polarised", "avg_polarised"]
-        )
-        self.n_type = np.where(spectrum_type_opts == spectrum_type)[0][0] + 1
+        spectrum_type_opts = ["tot_summed", "angular", "polarised", "avg_polarised"]
+        self.n_type = spectrum_type_opts.index(spectrum_type) + 1
 
         self.atom = excited_nth_element
         self.plot_i_atoms = plot_i_atoms
@@ -142,7 +150,20 @@ class NEXAFS:
         self.peaks = np.zeros([len(atom_ids), tmp_bands_l])
         self.bands = np.zeros([len(atom_ids), tmp_bands_l])
 
-    def check_prev_broadening(self, theta, phi) -> bool:
+    @property
+    def k_edge_max(self) -> np.float64:
+        """
+        Get the maximum intensity of the first peak.
+
+        Returns
+        -------
+        np.float64
+            maximum intensity of the first peak
+        """
+
+        return np.max(self.bands[np.where(self.peaks <= self.ewid_1)])
+
+    def check_prev_broadening(self, theta: str, phi: str) -> bool:
         """
         Check if broadened deltas files already exist.
 
@@ -156,11 +177,35 @@ class NEXAFS:
         else:
             return False
 
-    def get_nexafs_data(
+    def get_exp_nexafs_data(self, path: str) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Parse the experimental NEXAFS data
+
+        Data must be in the format of two columns: energy and intensity, not peaks and
+        bands.
+
+        Parameters
+        ----------
+        path : str
+            path to the NEXAFS data file
+
+        Returns
+        -------
+        x : npt.NDArray[np.float64]
+            energy values of the broadened spectrum
+        y : npt.NDArray[np.float64]
+            intensity values of the broadened spectrum
+        """
+
+        x, y = np.loadtxt(path, unpack=True)
+
+        return x, y
+
+    def get_sim_nexafs_data(
         self,
-        theta,
-        phi,
-        get_i_atom=False,
+        theta: str,
+        phi: str,
+        get_i_atom: bool = False,
     ) -> tuple[
         npt.NDArray[np.float64],
         npt.NDArray[np.float64],
@@ -168,32 +213,34 @@ class NEXAFS:
         npt.NDArray[np.float64],
     ]:
         """
-        Parse the NEXAFS data for all given theta and phi angles.
+        Parse the simulated NEXAFS data for all given theta and phi angles.
 
         Parameters
         ----------
-        peaks : np.ndarray
-            array to store the Dirac peak positions
-        bands : np.ndarray
-            array to store the Dirac peak intensities
-        get_i_atom : bool
+        peaks : npt.NDArray[np.float64]
+            array to store the Delta peak positions
+        bands : npt.NDArray[np.float64]
+            array to store the Delta peak intensities
+        get_i_atom : bool, default=False
             whether to parse and save the individual atom spectra to a file
 
         Returns
         -------
-        flat_peaks : np.ndarray
-            flattened array of Dirac peak positions
-        flat_bands : np.ndarray
-            flattened array of Dirac peak intensities
-        peaks : np.ndarray
-            array of Dirac peak positions
-        bands : np.ndarray
-            array of Dirac peak intensities
+        flat_peaks : npt.NDArray[np.float64]
+            flattened array of Delta peak positions
+        flat_bands : npt.NDArray[np.float64]
+            flattened array of Delta peak intensities
+        peaks : npt.NDArray[np.float64]
+            array of Delta peak positions
+        bands : npt.NDArray[np.float64]
+            array of Delta peak intensities
         """
 
         print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
         for i in range(len(self.dirs)):
-            nexafs = np.loadtxt(f"{self.dirs[i]}t{theta}_p{phi}{self.fname}")
+            nexafs = np.loadtxt(
+                f"{self.dirs[i]}t{theta}_p{phi}{self.fname}", skiprows=1
+            )
             self.peaks[i, :] = nexafs[:, 0]
             self.bands[i, :] = nexafs[:, self.n_type]
 
@@ -221,27 +268,70 @@ class NEXAFS:
 
         return flat_peaks, flat_bands, self.peaks, self.bands
 
+    def rigid_shift(self, shift_val: float):
+        """
+        Rigidly shift the spectrum by a value in the x-direction
+
+        Parameters
+        ----------
+        shift_val : float
+            amount to shift the spectrum by
+        """
+
+    # def normalise(self, data, domain, ewid_1) -> tuple[npt.NDArray[np.float64], float]:
+    #     """
+    #     Normalise spectrum such that first peak has intensity of 1.
+
+    #     Parameters
+    #     ----------
+    #     data : np.ndarray
+    #         broadened spectrum to normalise
+    #     domain : np.ndarray
+    #         range of x-values to include in the spectrum
+    #     ewid_1 : float
+    #         x-value at which the first peak region ends
+
+    #     Returns
+    #     -------
+    #     data : np.ndarray
+    #         normalised spectrum
+    #     k_edge_max : float
+    #         maximum intensity of the first peak
+    #     """
+
+    #     k_edge_max = np.max(data[np.where(domain <= ewid_1)])
+
+    #     # Scale the rest of the data proportionally
+    #     data /= k_edge_max
+
+    #     return data, k_edge_max
+
     # TODO: implement @lru_cache(maxsize=128)
     @staticmethod
-    def _schmid_pseudo_voigt(domain, m, E, omega) -> npt.NDArray[np.float64]:
+    def _schmid_pseudo_voigt(
+        domain: npt.NDArray[np.float64],
+        m: float,
+        E: float,
+        omega: Annotated[float, GreaterThan(0)],
+    ) -> npt.NDArray[np.float64]:
         """
         Apply broadening scheme for XPS spectra. See the following reference for more details:
         https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/sia.5521
 
         Parameters
         ----------
-        domain : np.ndarray
+        domain : npt.NDArray[np.float64]
             range of x-values to include in the spectrum
         m : float
             Gaussian-Lorentzian mixing parameter
         E : float
-            line centre/dirac peak
-        omega : float
+            line centre/delta peak
+        omega : Annotated[float, GreaterThan(0)]
             full width at half maximum (omega > 0)
 
         Returns
         -------
-        data : np.ndarray
+        data : npt.NDArray[np.float64]
             broadened spectrum
         """
 
@@ -250,46 +340,8 @@ class NEXAFS:
         ) + m * (1 / (2 * np.pi)) * (omega / ((omega / 2) ** 2 + (domain - E) ** 2))
 
     @staticmethod
-    def _normalise(
-        data, domain, ewid_1, norm_val=None
-    ) -> tuple[npt.NDArray[np.float64], float]:
-        """
-        Normalise spectrum such that first peak has intensity of 1.
-
-        Parameters
-        ----------
-        data : np.ndarray
-            broadened spectrum to normalise
-        domain : np.ndarray
-            range of x-values to include in the spectrum
-        ewid_1 : float
-            x-value at which the first peak region ends
-        norm_val : float
-            value to normalise the spectrum by
-
-        Returns
-        -------
-        data : np.ndarray
-            normalised spectrum
-        k_edge_max : float
-            maximum intensity of the first peak
-        """
-
-        # TODO: Change norm_val/k_edge_max to use getter/setter methods
-        # Find height of first peak
-        if norm_val is None:
-            k_edge_max = np.max(data[np.where(domain <= ewid_1)])
-        else:
-            k_edge_max = norm_val
-
-        # Scale the rest of the data proportionally
-        data /= k_edge_max
-
-        return data, k_edge_max
-
-    @staticmethod
     def _mp_broaden(
-        domain, mixing, dirac_peaks, sigma, coeffs
+        domain, mixing, delta_peaks, sigma, coeffs
     ) -> npt.NDArray[np.float64]:
         """
         Perform the broadening in parallel.
@@ -300,12 +352,12 @@ class NEXAFS:
             range of x-values to include in the spectrum
         mixing : np.ndarray
             Gaussian-Lorentzian mixing parameter
-        dirac_peaks : np.ndarray
-            line centre/dirac peak
+        delta_peaks : np.ndarray
+            line centre/delta peak
         sigma : np.ndarray
             linearly interpolated full width at half maximum
         coeffs : np.ndarray
-            Dirac peak intensities
+            Delta peak intensities
 
         Returns
         -------
@@ -314,14 +366,14 @@ class NEXAFS:
         """
 
         data = np.sum(
-            NEXAFS._schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
+            NEXAFS._schmid_pseudo_voigt(domain, mixing, delta_peaks, sigma) * coeffs
         )
 
         return data
 
     @staticmethod
     def _sp_broaden(
-        data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
+        data, domain, mixing, delta_peaks, sigma, coeffs
     ) -> npt.NDArray[np.float64]:
         """
         Perform the broadening in serial.
@@ -334,14 +386,12 @@ class NEXAFS:
             range of x-values to include in the spectrum
         mixing : np.ndarray
             Gaussian-Lorentzian mixing parameter
-        dirac_peaks : np.ndarray
-            line centre/dirac peak
+        delta_peaks : np.ndarray
+            line centre/delta peak
         sigma : np.ndarray
             linearly interpolated full width at half maximum
         coeffs : np.ndarray
-            Dirac peak intensities
-        with_tqdm : bool
-            whether to use tqdm to show progress of broadening
+            Delta peak intensities
 
         Returns
         -------
@@ -349,54 +399,38 @@ class NEXAFS:
             broadened spectrum
         """
 
-        if with_tqdm:
-            for i in tqdm(range(len(domain))):
-                data[i] = np.sum(
-                    NEXAFS._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
-                    * coeffs
-                )
-
-        else:
-            for i in range(len(domain)):
-                data[i] = np.sum(
-                    NEXAFS._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
-                    * coeffs
-                )
+        for i in tqdm(range(len(domain))):
+            data[i] = np.sum(
+                NEXAFS._schmid_pseudo_voigt(domain[i], mixing, delta_peaks, sigma)
+                * coeffs
+            )
 
         return data
 
     def broaden(
         self,
-        dirac_peaks,
-        coeffs,
+        delta_peaks: npt.NDArray[np.float64],
+        coeffs: npt.NDArray[np.float64],
         bin_width=0.01,
-        with_tqdm=True,
-        norm=None,
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], float]:
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
-        Broaden dirac delta peaks.
+        Broaden delta delta peaks.
 
         Parameters
         ----------
-        dirac_peaks : np.ndarray
-            list of dirac delta peaks
-        coeffs : np.ndarray
-            Dirac peak intensities
-        bin_width : float
+        delta_peaks : npt.NDArray[np.float64]
+            list of delta delta peaks
+        coeffs : npt.NDArray[np.float64]
+            Delta peak intensities
+        bin_width : float, default=0.01
             width of the bins to use
-        with_tqdm : bool
-            whether to use tqdm to show progress of broadening
-        norm : float
-            value to normalise the spectrum to
 
         Returns
         -------
-        domain : np.ndarray
+        domain : npt.NDArray[np.float64]
             range of x-values to used in the spectrum
-        data : np.ndarray
+        data : npt.NDArray[np.float64]
             broadened spectrum
-        norm_val : float
-            value used to normalise the spectrum
         """
 
         domain = np.arange(self.start, self.stop, bin_width)
@@ -404,71 +438,48 @@ class NEXAFS:
         # k_edge_last_x = 0.0
 
         if coeffs is None:
-            coeffs = np.zeros(len(dirac_peaks))
+            coeffs = np.zeros(len(delta_peaks))
 
         # Find the peaks in the different broadening regions
-        sigma = np.zeros((len(dirac_peaks)))
-        mixing = np.zeros((len(dirac_peaks)))
+        sigma = np.zeros((len(delta_peaks)))
+        mixing = np.zeros((len(delta_peaks)))
 
         sigma_precalc = (self.omega_2 - self.omega_1) / (self.ewid_2 - self.ewid_1)
         mix_precalc = (self.mix_2 - self.mix_1) / (self.ewid_2 - self.ewid_1)
 
-        for i in range(len(dirac_peaks)):
-            if dirac_peaks[i] <= self.ewid_1:
+        for i in range(len(delta_peaks)):
+            if delta_peaks[i] <= self.ewid_1:
                 sigma[i] = self.omega_1
                 mixing[i] = self.mix_1
                 # TODO find a better way of doing this
-                # if dirac_peaks[i] <= self.ewid_1 - 3.0 and dirac_peaks[i] >= 1.0:
-                #     k_edge_last_x = dirac_peaks[i]
-            elif dirac_peaks[i] > self.ewid_2:
+                # if delta_peaks[i] <= self.ewid_1 - 3.0 and delta_peaks[i] >= 1.0:
+                #     k_edge_last_x = delta_peaks[i]
+            elif delta_peaks[i] > self.ewid_2:
                 sigma[i] = self.omega_2
                 mixing[i] = self.mix_2
             else:
                 sigma[i] = self.omega_1 + (
-                    sigma_precalc * (dirac_peaks[i] - self.ewid_1)
+                    sigma_precalc * (delta_peaks[i] - self.ewid_1)
                 )
-                mixing[i] = self.mix_1 + (mix_precalc * (dirac_peaks[i] - self.ewid_1))
+                mixing[i] = self.mix_1 + (mix_precalc * (delta_peaks[i] - self.ewid_1))
 
-        if with_tqdm:
-            # Parallelise in an openmp style
-            if self.n_procs > 1:
-                mp_func = partial(
-                    NEXAFS._mp_broaden,
-                    mixing=mixing,
-                    dirac_peaks=dirac_peaks,
-                    sigma=sigma,
-                    coeffs=coeffs,
-                )
-
-                # Not able to use tqdm with multiprocessing
-                with Pool(self.n_procs) as pool:
-                    data = np.array(pool.map(mp_func, domain))
-
-            # TODO I think this is redundant
-            else:
-                data = NEXAFS._sp_broaden(
-                    data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
-                )
-
-        else:
-            data = NEXAFS._sp_broaden(
-                data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=False
+        # Parallelise in an openmp style
+        if self.n_procs > 1:
+            mp_func = partial(
+                NEXAFS._mp_broaden,
+                mixing=mixing,
+                delta_peaks=delta_peaks,
+                sigma=sigma,
+                coeffs=coeffs,
             )
 
-        # TODO Figure out how to normalise when first peak doesn't exist
-        # Normalise the spectrum
-        if norm is None:
-            # data, norm_val = Nexafs._normalise(data, domain, k_edge_last_x)
-            norm_val = 1
-            # print("Not normalising")
-        else:
-            # data, norm_val = Nexafs._normalise(
-            #     data, domain, k_edge_last_x, norm_val=norm
-            # )
-            norm_val = 1
-            # print("Not normalising")
+            with Pool(self.n_procs) as pool:
+                data = np.array(pool.map(mp_func, domain))
 
-        return domain, data, norm_val
+        else:
+            data = NEXAFS._sp_broaden(data, domain, mixing, delta_peaks, sigma, coeffs)
+
+        return domain, data
 
     @staticmethod
     def _plot(
@@ -485,14 +496,14 @@ class NEXAFS:
             path to the data
         label : str
             label to use for theplot
-        colour : str
+        colour : str, default=None
             colour of the plotted line
 
         Returns
         -------
-        x : np.ndarray
+        x : npt.NDArray[np.float64]
             energy values of broadened spectrum
-        y : np.ndarray
+        y : npt.NDArray[np.float64]
             intensity values of broadened spectrum
         """
 
@@ -520,15 +531,15 @@ class NEXAFS:
         ----------
         deltas : list[str]
             list of x-ray incidence angles
-        cmap : str
+        cmap : str, default="plasma"
             colour map to use for invdividual atom contributions in the plot
-        reversed_cmap : bool
+        reversed_cmap : bool, default=True
             whether to reverse the colour map
-        lower_cmap_range : float
+        lower_cmap_range : float, default=0.1
             normalised lower bound colour of the colour map
-        upper_cmap_range : float
+        upper_cmap_range : float, default=1.0
             normalised upper bound colour of the colour map
-        mpl_figsize : Tuple[float, float]
+        mpl_figsize : Tuple[float, float], default=(8.0, 5.0)
             size of the saved figure
         """
 
@@ -663,17 +674,17 @@ def main(
     for t in theta:
         for p in phi:
             # Check if deltas files already exist
-            if nexafs.check_prev_broadening(t, p):
-                print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
-                continue
+            # if nexafs.check_prev_broadening(t, p):
+            #     print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
+            #     continue
 
-            flat_peaks, flat_bands, peaks, bands = nexafs.get_nexafs_data(
+            flat_peaks, flat_bands, peaks, bands = nexafs.get_sim_nexafs_data(
                 t, p, get_i_atom=get_i_atoms
             )
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
             print("Broadening total spectrum...")
-            x, y, norm_val = nexafs.broaden(flat_peaks, flat_bands)
+            x, y = nexafs.broaden(flat_peaks, flat_bands)
 
             # Write out spectrum to a text file
             np.savetxt(
@@ -684,12 +695,7 @@ def main(
                 print("Broadening individual atom spectra...")
 
                 for i in tqdm(range(len(nexafs.dirs))):
-                    x, y, _ = nexafs.broaden(
-                        peaks[i, :],
-                        bands[i, :],
-                        with_tqdm=False,
-                        norm=norm_val,
-                    )
+                    x, y = nexafs.broaden(peaks[i, :], bands[i, :])
 
                     # Write out spectrum to a text file
                     np.savetxt(
@@ -713,20 +719,20 @@ def main(
     "-n",
     "--n_procs",
     default=1,
-    type=int,
+    type=click.IntRange(1, clamp=True),
     show_default=True,
     help="number of processors to use",
 )
 @click.option(
-    "-b", "--begin", default=285.0, type=float, help="start of energy range to plot"
+    "-b", "--begin", required=True, type=float, help="start of energy range to plot"
 )
 @click.option(
-    "-e", "--end", default=300.0, type=float, help="end of energy range to plot"
+    "-e", "--end", required=True, type=float, help="end of energy range to plot"
 )
 @click.option(
     "-i",
     "--initial_peak",
-    default=290.0,
+    required=True,
     type=float,
     show_default=True,
     help="energy value of the initial peak",
