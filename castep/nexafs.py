@@ -7,10 +7,11 @@ from multiprocessing import Pool
 import click
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from tqdm import tqdm
 
 
-class Nexafs:
+class NEXAFS:
     def __init__(
         self,
         n_procs,
@@ -35,44 +36,44 @@ class Nexafs:
         """
         Parameters
         ----------
-            n_procs : int
-                number of processors to use
-            begin : float
-                start of energy range to plot
-            end : float
-                end of energy range to plot
-            initial_peak : float
-                energy value of the initial peak
-            omega_1 : float
-                full width at half maximum for region 1
-            omega_2 : float
-                full width at half maximum for region 2
-            mix_1 : float
-                Gaussian-Lorentzian mixing parameter for region 1
-            mix_2 : float
-                Gaussian-Lorentzian mixing parameter for region 2
-            molecule : str
-                adsorbate name
-            surface : str
-                surface element
-            excited_atom : str
-                element symbol of the excited atom
-            index_start : int
-                index of the first excited atom
-            index_end : int
-                index of the last excited atom
-            spectrum_type : str
-                type of spectrum to plot
-            phi : list
-                phi angles
-            theta : list
-                theta angles
-            excited_nth_element : int
-                the element index of the excited atom of all the elements in the system
-                - this will always be the last element in the system, so if system
-                contains C, Cu, C:exc it will be 3
-            plot_i_atoms : bool
-                plot individual atom spectra
+        n_procs : int
+            number of processors to use
+        begin : float
+            start of energy range to plot
+        end : float
+            end of energy range to plot
+        initial_peak : float
+            energy value of the initial peak
+        omega_1 : float
+            full width at half maximum for region 1
+        omega_2 : float
+            full width at half maximum for region 2
+        mix_1 : float
+            Gaussian-Lorentzian mixing parameter for region 1
+        mix_2 : float
+            Gaussian-Lorentzian mixing parameter for region 2
+        molecule : str
+            adsorbate name
+        surface : str
+            surface element
+        excited_atom : str
+            element symbol of the excited atom
+        index_start : int
+            index of the first excited atom
+        index_end : int
+            index of the last excited atom
+        spectrum_type : str
+            type of spectrum to plot
+        phi : list
+            phi angles
+        theta : list
+            theta angles
+        excited_nth_element : int
+            the element index of the excited atom of all the elements in the system
+            - this will always be the last element in the system, so if system
+            contains C, Cu, C:exc it will be 3
+        plot_i_atoms : bool
+            plot individual atom spectra
         """
 
         # Number of processors to use
@@ -160,29 +161,34 @@ class Nexafs:
         theta,
         phi,
         get_i_atom=False,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
+    ]:
         """
         Parse the NEXAFS data for all given theta and phi angles.
 
         Parameters
         ----------
-            peaks : np.ndarray
-                array to store the Dirac peak positions
-            bands : np.ndarray
-                array to store the Dirac peak intensities
-            get_i_atom : bool
-                whether to parse and save the individual atom spectra to a file
+        peaks : np.ndarray
+            array to store the Dirac peak positions
+        bands : np.ndarray
+            array to store the Dirac peak intensities
+        get_i_atom : bool
+            whether to parse and save the individual atom spectra to a file
 
         Returns
         -------
-            flat_peaks : np.ndarray
-                flattened array of Dirac peak positions
-            flat_bands : np.ndarray
-                flattened array of Dirac peak intensities
-            peaks : np.ndarray
-                array of Dirac peak positions
-            bands : np.ndarray
-                array of Dirac peak intensities
+        flat_peaks : np.ndarray
+            flattened array of Dirac peak positions
+        flat_bands : np.ndarray
+            flattened array of Dirac peak intensities
+        peaks : np.ndarray
+            array of Dirac peak positions
+        bands : np.ndarray
+            array of Dirac peak intensities
         """
 
         print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
@@ -217,26 +223,26 @@ class Nexafs:
 
     # TODO: implement @lru_cache(maxsize=128)
     @staticmethod
-    def _schmid_pseudo_voigt(domain, m, E, omega) -> np.ndarray:
+    def _schmid_pseudo_voigt(domain, m, E, omega) -> npt.NDArray[np.float64]:
         """
         Apply broadening scheme for XPS spectra. See the following reference for more details:
         https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/sia.5521
 
         Parameters
         ----------
-            domain : np.ndarray
-                range of x-values to include in the spectrum
-            m : float
-                Gaussian-Lorentzian mixing parameter
-            E : float
-                line centre/dirac peak
-            omega : float
-                full width at half maximum (omega > 0)
+        domain : np.ndarray
+            range of x-values to include in the spectrum
+        m : float
+            Gaussian-Lorentzian mixing parameter
+        E : float
+            line centre/dirac peak
+        omega : float
+            full width at half maximum (omega > 0)
 
         Returns
         -------
-            data : np.ndarray
-                broadened spectrum
+        data : np.ndarray
+            broadened spectrum
         """
 
         return (1 - m) * np.sqrt((4 * np.log(2)) / (np.pi * omega**2)) * np.exp(
@@ -244,27 +250,29 @@ class Nexafs:
         ) + m * (1 / (2 * np.pi)) * (omega / ((omega / 2) ** 2 + (domain - E) ** 2))
 
     @staticmethod
-    def _normalise(data, domain, ewid_1, norm_val=None) -> tuple[np.ndarray, float]:
+    def _normalise(
+        data, domain, ewid_1, norm_val=None
+    ) -> tuple[npt.NDArray[np.float64], float]:
         """
         Normalise spectrum such that first peak has intensity of 1.
 
         Parameters
         ----------
-            data : np.ndarray
-                broadened spectrum to normalise
-            domain : np.ndarray
-                range of x-values to include in the spectrum
-            ewid_1 : float
-                x-value at which the first peak region ends
-            norm_val : float
-                value to normalise the spectrum by
+        data : np.ndarray
+            broadened spectrum to normalise
+        domain : np.ndarray
+            range of x-values to include in the spectrum
+        ewid_1 : float
+            x-value at which the first peak region ends
+        norm_val : float
+            value to normalise the spectrum by
 
         Returns
         -------
-            data : np.ndarray
-                normalised spectrum
-            k_edge_max : float
-                maximum intensity of the first peak
+        data : np.ndarray
+            normalised spectrum
+        k_edge_max : float
+            maximum intensity of the first peak
         """
 
         # TODO: Change norm_val/k_edge_max to use getter/setter methods
@@ -280,31 +288,33 @@ class Nexafs:
         return data, k_edge_max
 
     @staticmethod
-    def _mp_broaden(domain, mixing, dirac_peaks, sigma, coeffs) -> np.ndarray:
+    def _mp_broaden(
+        domain, mixing, dirac_peaks, sigma, coeffs
+    ) -> npt.NDArray[np.float64]:
         """
         Perform the broadening in parallel.
 
         Parameters
         ----------
-            domain : np.ndarray
-                range of x-values to include in the spectrum
-            mixing : np.ndarray
-                Gaussian-Lorentzian mixing parameter
-            dirac_peaks : np.ndarray
-                line centre/dirac peak
-            sigma : np.ndarray
-                linearly interpolated full width at half maximum
-            coeffs : np.ndarray
-                Dirac peak intensities
+        domain : np.ndarray
+            range of x-values to include in the spectrum
+        mixing : np.ndarray
+            Gaussian-Lorentzian mixing parameter
+        dirac_peaks : np.ndarray
+            line centre/dirac peak
+        sigma : np.ndarray
+            linearly interpolated full width at half maximum
+        coeffs : np.ndarray
+            Dirac peak intensities
 
         Returns
         -------
-            data : np.ndarray
-                broadened spectrum
+        data : np.ndarray
+            broadened spectrum
         """
 
         data = np.sum(
-            Nexafs._schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
+            NEXAFS._schmid_pseudo_voigt(domain, mixing, dirac_peaks, sigma) * coeffs
         )
 
         return data
@@ -312,44 +322,44 @@ class Nexafs:
     @staticmethod
     def _sp_broaden(
         data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
-    ) -> np.ndarray:
+    ) -> npt.NDArray[np.float64]:
         """
         Perform the broadening in serial.
 
         Parameters
         ----------
-            data : np.ndarray
-                non-broadened spectrum
-            domain : np.ndarray
-                range of x-values to include in the spectrum
-            mixing : np.ndarray
-                Gaussian-Lorentzian mixing parameter
-            dirac_peaks : np.ndarray
-                line centre/dirac peak
-            sigma : np.ndarray
-                linearly interpolated full width at half maximum
-            coeffs : np.ndarray
-                Dirac peak intensities
-            with_tqdm : bool
-                whether to use tqdm to show progress of broadening
+        data : np.ndarray
+            non-broadened spectrum
+        domain : np.ndarray
+            range of x-values to include in the spectrum
+        mixing : np.ndarray
+            Gaussian-Lorentzian mixing parameter
+        dirac_peaks : np.ndarray
+            line centre/dirac peak
+        sigma : np.ndarray
+            linearly interpolated full width at half maximum
+        coeffs : np.ndarray
+            Dirac peak intensities
+        with_tqdm : bool
+            whether to use tqdm to show progress of broadening
 
         Returns
         -------
-            data : np.ndarray
-                broadened spectrum
+        data : np.ndarray
+            broadened spectrum
         """
 
         if with_tqdm:
             for i in tqdm(range(len(domain))):
                 data[i] = np.sum(
-                    Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
+                    NEXAFS._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
                     * coeffs
                 )
 
         else:
             for i in range(len(domain)):
                 data[i] = np.sum(
-                    Nexafs._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
+                    NEXAFS._schmid_pseudo_voigt(domain[i], mixing, dirac_peaks, sigma)
                     * coeffs
                 )
 
@@ -362,31 +372,31 @@ class Nexafs:
         bin_width=0.01,
         with_tqdm=True,
         norm=None,
-    ) -> tuple[np.ndarray, np.ndarray, float]:
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], float]:
         """
         Broaden dirac delta peaks.
 
         Parameters
         ----------
-            dirac_peaks : np.ndarray
-                list of dirac delta peaks
-            coeffs : np.ndarray
-                Dirac peak intensities
-            bin_width : float
-                width of the bins to use
-            with_tqdm : bool
-                whether to use tqdm to show progress of broadening
-            norm : float
-                value to normalise the spectrum to
+        dirac_peaks : np.ndarray
+            list of dirac delta peaks
+        coeffs : np.ndarray
+            Dirac peak intensities
+        bin_width : float
+            width of the bins to use
+        with_tqdm : bool
+            whether to use tqdm to show progress of broadening
+        norm : float
+            value to normalise the spectrum to
 
         Returns
         -------
-            domain : np.ndarray
-                range of x-values to used in the spectrum
-            data : np.ndarray
-                broadened spectrum
-            norm_val : float
-                value used to normalise the spectrum
+        domain : np.ndarray
+            range of x-values to used in the spectrum
+        data : np.ndarray
+            broadened spectrum
+        norm_val : float
+            value used to normalise the spectrum
         """
 
         domain = np.arange(self.start, self.stop, bin_width)
@@ -423,7 +433,7 @@ class Nexafs:
             # Parallelise in an openmp style
             if self.n_procs > 1:
                 mp_func = partial(
-                    Nexafs._mp_broaden,
+                    NEXAFS._mp_broaden,
                     mixing=mixing,
                     dirac_peaks=dirac_peaks,
                     sigma=sigma,
@@ -436,12 +446,12 @@ class Nexafs:
 
             # TODO I think this is redundant
             else:
-                data = Nexafs._sp_broaden(
+                data = NEXAFS._sp_broaden(
                     data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=True
                 )
 
         else:
-            data = Nexafs._sp_broaden(
+            data = NEXAFS._sp_broaden(
                 data, domain, mixing, dirac_peaks, sigma, coeffs, with_tqdm=False
             )
 
@@ -461,27 +471,29 @@ class Nexafs:
         return domain, data, norm_val
 
     @staticmethod
-    def _plot(angle, path, label, colour=None) -> tuple[np.ndarray, np.ndarray]:
+    def _plot(
+        angle, path, label, colour=None
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         Private method to parse NEXAFS data and add to mpl graph.
 
         Parameters
         ----------
-            angle : str
-                angle of the spectrum
-            path : str
-                path to the data
-            label : str
-                label to use for theplot
-            colour : str
-                colour of the plotted line
+        angle : str
+            angle of the spectrum
+        path : str
+            path to the data
+        label : str
+            label to use for theplot
+        colour : str
+            colour of the plotted line
 
         Returns
         -------
-            x : np.ndarray
-                energy values of broadened spectrum
-            y : np.ndarray
-                intensity values of broadened spectrum
+        x : np.ndarray
+            energy values of broadened spectrum
+        y : np.ndarray
+            intensity values of broadened spectrum
         """
 
         x, y = np.loadtxt(
@@ -506,18 +518,18 @@ class Nexafs:
 
         Parameters
         ----------
-            deltas : list[str]
-                list of x-ray incidence angles
-            cmap : str
-                colour map to use for invdividual atom contributions in the plot
-            reversed_cmap : bool
-                whether to reverse the colour map
-            lower_cmap_range : float
-                normalised lower bound colour of the colour map
-            upper_cmap_range : float
-                normalised upper bound colour of the colour map
-            mpl_figsize : Tuple[float, float]
-                size of the saved figure
+        deltas : list[str]
+            list of x-ray incidence angles
+        cmap : str
+            colour map to use for invdividual atom contributions in the plot
+        reversed_cmap : bool
+            whether to reverse the colour map
+        lower_cmap_range : float
+            normalised lower bound colour of the colour map
+        upper_cmap_range : float
+            normalised upper bound colour of the colour map
+        mpl_figsize : Tuple[float, float]
+            size of the saved figure
         """
 
         # Set the saved figure size
@@ -591,7 +603,7 @@ class Nexafs:
         for delta, c in zip(
             deltas, np.linspace(lower_cmap_range, upper_cmap_range, len(deltas))
         ):
-            x, _ = Nexafs._plot(delta, "./", rf"$\theta = {delta[1:3]}$", cmap(c))
+            x, _ = NEXAFS._plot(delta, "./", rf"$\theta = {delta[1:3]}$", cmap(c))
             x_vals = np.concatenate((x_vals, x))
 
         plt.xticks(np.arange(min(x), max(x) + 1, 2))
@@ -626,7 +638,7 @@ def main(
     atom_contribution_plot,
     multi_angle_plot,
 ):
-    nexafs = Nexafs(
+    nexafs = NEXAFS(
         n_procs,
         begin,
         end,

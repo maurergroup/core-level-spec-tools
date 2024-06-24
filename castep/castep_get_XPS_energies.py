@@ -1,5 +1,4 @@
 import re
-from ase.io import read
 
 # This script searches through the ground state and excited state .castep files
 # and calculates the XPS binding energies for a pseudopotential calculation 

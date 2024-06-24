@@ -14,10 +14,15 @@ matplotlib = "^3.8.2"
 tqdm = "^4.66.1"
 click = "^8.1.7"
 
+[tool.poetry.group.dev.dependencies]
+isort = "^5.13.2"
+ptpython = "^3.0.27"
+black = "^24.4.2"
+ruff = "^0.4.10"
+
 [tool.poetry.scripts]
 nexafs = "castep.nexafs:nexafs"
 molpdos = "castep.execute_molpdos:molpdos"
-
 
 [build-system]
 requires = ["poetry-core"]
