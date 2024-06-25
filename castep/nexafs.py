@@ -203,17 +203,34 @@ class NEXAFS:
 
     @property
     def k_edge_max(self) -> np.float64:
-        """The energy of the maximum intensity of the first peak."""
+        """The maximum intensity of the first peak."""
 
         try:
             return self._k_edge_max
 
         except AttributeError:
-            self._k_edge_max = self.flat_peaks[
-                np.argmax(self.bands[np.where(self.peaks <= self.ewid_1)])
-            ]
-
+            self._k_edge_max = np.max(self.bands[np.where(self.peaks <= self.ewid_1)])
             return self._k_edge_max
+
+    @property
+    def domain(self) -> npt.NDArray[np.float64]:
+        """Broadened spectrum x-values."""
+
+        return self._domain
+
+    @domain.setter
+    def domain(self, domain: npt.NDArray[np.float64]):
+        self._domain = domain
+
+    @property
+    def broadened(self) -> npt.NDArray[np.float64]:
+        """Broadened spectrum."""
+
+        return self._broadened
+
+    @broadened.setter
+    def broadened(self, broadened: npt.NDArray[np.float64]):
+        self._broadened = broadened
 
     def check_prev_broadening(self, theta: str, phi: str) -> bool:
         """
@@ -419,8 +436,7 @@ class NEXAFS:
         return data
 
     def broaden(
-        self,
-        bin_width=0.01,
+        self, bin_width=0.01
     ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         Broaden NEXAFS delta peaks.
@@ -438,11 +454,13 @@ class NEXAFS:
             broadened spectrum
         """
 
-        domain = np.arange(self.start, self.stop, bin_width)
-        self.broadened = np.zeros([len(domain)])
+        self.domain = np.arange(self.start, self.stop, bin_width)
+        self.broadened = np.zeros([len(self.domain)])
 
         if self.flat_bands is None:
             coeffs = np.zeros(len(self.flat_peaks))
+        else:
+            coeffs = self.flat_bands
 
         # Find the peaks in the different broadening regions
         sigma = np.zeros((len(self.flat_peaks)))
@@ -473,7 +491,7 @@ class NEXAFS:
         if self.n_procs > 1:
             mp_func = partial(
                 NEXAFS._mp_broaden,
-                domain=domain,
+                domain=self.domain,
                 mixing=mixing,
                 delta_peak=self.flat_peaks,
                 sigma=sigma,
@@ -481,51 +499,19 @@ class NEXAFS:
             )
 
             with Pool(self.n_procs) as pool:
-                self.broadened = np.array(pool.map(mp_func, domain))
+                self.broadened = np.array(pool.map(mp_func, self.domain))
 
         else:
-            data = NEXAFS._sp_broaden(
-                self.broadened, domain, mixing, self.flat_peaks, sigma, coeffs
+            self.broadened = NEXAFS._sp_broaden(
+                self.broadened, self.domain, mixing, self.flat_peaks, sigma, coeffs
             )
 
-        return domain, data
+        return self.domain, self.broadened
 
-    def normalise(self):
-        """
-        Normalise the spectrum so the k-edge has an intensity of 1
-        """
+    def normalise(self) -> None:
+        """Normalise the broadened spectrum so the k-edge has an intensity of 1"""
 
-        k_edge_max = np.max(self.flat_bands[np.where(self.flat_peaks <= self.ewid_1)])
-
-        self.flat_bands /= k_edge_max
-
-    # def normalise(self, data, domain, ewid_1) -> tuple[npt.NDArray[np.float64], float]:
-    #     """
-    #     Normalise spectrum such that first peak has intensity of 1.
-
-    #     Parameters
-    #     ----------
-    #     data : np.ndarray
-    #         broadened spectrum to normalise
-    #     domain : np.ndarray
-    #         range of x-values to include in the spectrum
-    #     ewid_1 : float
-    #         x-value at which the first peak region ends
-
-    #     Returns
-    #     -------
-    #     data : np.ndarray
-    #         normalised spectrum
-    #     k_edge_max : float
-    #         maximum intensity of the first peak
-    #     """
-
-    #     k_edge_max = np.max(data[np.where(domain <= ewid_1)])
-
-    #     # Scale the rest of the data proportionally
-    #     data /= k_edge_max
-
-    #     return data, k_edge_max
+        self.broadened /= self.k_edge_max
 
     @staticmethod
     def _plot(
@@ -560,6 +546,17 @@ class NEXAFS:
         plt.plot(x, y, c=colour, label=label)
 
         return x, y
+
+    def single_spectrum_plot(self):  # -> plt:
+        """
+        Export a plotted spectrum
+
+        The main use case of this is to plot with other NEXAFS objects
+        """
+
+        plt.plot(self.domain, self.broadened)
+        plt.savefig("test.png")
+        exit()
 
     def atom_contribution_plot(
         self,
@@ -726,12 +723,15 @@ def main(
 
             nexafs.parse_sim_nexafs_data(t, p, get_i_atom=get_i_atoms)
 
-            nexafs.rigid_shift(1)
-            exit()
+            nexafs.rigid_shift(2)
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
             print("Broadening total spectrum...")
             x, y = nexafs.broaden()
+
+            nexafs.normalise()
+            nexafs.single_spectrum_plot()
+            exit()
 
             # Write out spectrum to a text file
             np.savetxt(
@@ -742,7 +742,7 @@ def main(
                 print("Broadening individual atom spectra...")
 
                 for i in tqdm(range(len(nexafs.dirs))):
-                    x, y = nexafs.broaden(peaks[i, :], bands[i, :])
+                    x, y = nexafs.broaden()
 
                     # Write out spectrum to a text file
                     np.savetxt(
@@ -770,11 +770,30 @@ def main(
     show_default=True,
     help="number of processors to use",
 )
+@click.option("-m", "--molecule", required=True, type=str, help="adsorbate name")
+@click.option("-s", "--surface", required=True, type=str, help="surface element")
+@click.option(
+    "-a",
+    "--excited_atom",
+    required=True,
+    type=str,
+    help="element symbol of the excited atom",
+)
 @click.option(
     "-b", "--begin", required=True, type=float, help="start of energy range to plot"
 )
 @click.option(
     "-e", "--end", required=True, type=float, help="end of energy range to plot"
+)
+@click.option(
+    "-i1",
+    "--index_start",
+    required=True,
+    type=int,
+    help="index of the first excited atom",
+)
+@click.option(
+    "-i2", "--index_end", required=True, type=int, help="index of the last excited atom"
 )
 @click.option(
     "-i",
@@ -815,25 +834,6 @@ def main(
     type=float,
     show_default=True,
     help="Gaussian-Lorentzian mixing parameter for region 2",
-)
-@click.option("-m", "--molecule", required=True, type=str, help="adsorbate name")
-@click.option("-s", "--surface", required=True, type=str, help="surface element")
-@click.option(
-    "-a",
-    "--excited_atom",
-    required=True,
-    type=str,
-    help="element symbol of the excited atom",
-)
-@click.option(
-    "-i1",
-    "--index_start",
-    required=True,
-    type=int,
-    help="index of the first excited atom",
-)
-@click.option(
-    "-i2", "--index_end", required=True, type=int, help="index of the last excited atom"
 )
 @click.option(
     "-y",
@@ -890,18 +890,18 @@ def main(
 )
 def nexafs(
     n_procs,
+    molecule,
+    surface,
+    excited_atom,
     begin,
     end,
+    index_start,
+    index_end,
     initial_peak,
     omega_1,
     omega_2,
     mix_1,
     mix_2,
-    molecule,
-    surface,
-    excited_atom,
-    index_start,
-    index_end,
     spectrum_type,
     phi,
     theta,
