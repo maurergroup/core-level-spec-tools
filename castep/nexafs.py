@@ -2,12 +2,13 @@
 
 import os
 from dataclasses import dataclass
-from functools import partial, lru_cache
+from functools import partial
 from multiprocessing import Pool
 from typing import Annotated, Literal
 
 import click
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import numpy.typing as npt
 from tqdm import tqdm
@@ -23,6 +24,9 @@ class GreaterThan:
 
 
 class NEXAFS:
+
+    plt.figure().gca().xaxis.set_major_locator(ticker.MultipleLocator(2))
+
     def __init__(
         self,
         n_procs: int,
@@ -203,14 +207,24 @@ class NEXAFS:
 
     @property
     def k_edge_max(self) -> np.float64:
-        """The maximum intensity of the first peak."""
+        """The maximum intensity of the broadened first peak."""
 
         try:
             return self._k_edge_max
 
         except AttributeError:
-            self._k_edge_max = np.max(self.bands[np.where(self.peaks <= self.ewid_1)])
-            return self._k_edge_max
+
+            if self.broadened is None:
+                self._k_edge_max = np.max(
+                    self.flat_bands[np.asarray(self.flat_peaks < self.ewid_1).nonzero()]
+                )
+                return self._k_edge_max
+
+            else:
+                self._k_edge_max = np.max(
+                    self.broadened[np.asarray(self.domain < self.ewid_1).nonzero()]
+                )
+                return self._k_edge_max
 
     @property
     def domain(self) -> npt.NDArray[np.float64]:
@@ -312,19 +326,6 @@ class NEXAFS:
         )
 
         print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
-
-    def rigid_shift(self, shift_val: float) -> None:
-        """
-        Rigidly shift the spectrum by a value in the x-direction
-
-        Parameters
-        ----------
-        shift_val : float
-            amount to shift the spectrum by
-        """
-
-        self.peaks -= shift_val
-        self.flat_peaks -= shift_val
 
     @staticmethod
     def _schmid_pseudo_voigt(
@@ -435,9 +436,7 @@ class NEXAFS:
 
         return data
 
-    def broaden(
-        self, bin_width=0.01
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def broaden(self, bin_width=0.01) -> None:
         """
         Broaden NEXAFS delta peaks.
 
@@ -491,7 +490,6 @@ class NEXAFS:
         if self.n_procs > 1:
             mp_func = partial(
                 NEXAFS._mp_broaden,
-                domain=self.domain,
                 mixing=mixing,
                 delta_peak=self.flat_peaks,
                 sigma=sigma,
@@ -506,12 +504,33 @@ class NEXAFS:
                 self.broadened, self.domain, mixing, self.flat_peaks, sigma, coeffs
             )
 
-        return self.domain, self.broadened
+    def rigid_shift(self, shift_val: float) -> None:
+        """
+        Rigidly shift the spectrum by a value in the x-direction
+
+        Parameters
+        ----------
+        shift_val : float
+            amount to shift the spectrum by
+        """
+
+        # Shift the broadened spectrum if called after broaden
+        print(self.domain)
+        if self.domain is None:
+            self.peaks -= shift_val
+            self.flat_peaks -= shift_val
+        else:
+            self.domain -= shift_val
 
     def normalise(self) -> None:
         """Normalise the broadened spectrum so the k-edge has an intensity of 1"""
 
-        self.broadened /= self.k_edge_max
+        # Normalise the broadened spectrum if called after broaden
+        if self.broadened is None:
+            self.bands /= self.k_edge_max
+            self.flat_bands /= self.k_edge_max
+        else:
+            self.broadened /= self.k_edge_max
 
     @staticmethod
     def _plot(
@@ -527,7 +546,7 @@ class NEXAFS:
         path : str
             path to the data
         label : str
-            label to use for theplot
+            label to use for the plot
         colour : str, default=None
             colour of the plotted line
 
@@ -539,24 +558,35 @@ class NEXAFS:
             intensity values of broadened spectrum
         """
 
-        x, y = np.loadtxt(
-            f"{path}/graphene_Cu_spectrum_{angle}.txt", usecols=(0, 1), unpack=True
-        )
+        x, y = np.loadtxt(f"{path}/graphene_Cu_spectrum_{angle}.txt", unpack=True)
 
         plt.plot(x, y, c=colour, label=label)
 
         return x, y
 
-    def single_spectrum_plot(self):  # -> plt:
+    def basic_plot(self, theta, phi):  # -> plt:
         """
         Export a plotted spectrum
 
         The main use case of this is to plot with other NEXAFS objects
         """
 
-        plt.plot(self.domain, self.broadened)
+        # for i in self.dirs:
+        #     angle = f"t{theta}_p{phi}"
+        #     self._plot(angle, f"{i}/{angle}", i[:-1])
+
+        x, y = np.loadtxt(f"./graphene_Cu_spectrum_t{theta}_p{phi}.txt", unpack=True)
+
+        plt.plot(x, y)
+
+        # x, _ = self._plot("./", "Total Spectrum", "black")
+        # plt.xticks(np.arange(min(x), max(x) + 1, 2))
+        # plt.ylabel("Normalised Intensity")
+        # plt.xlabel("Energy (eV)")
+        # plt.tight_layout()
+        # plt.legend()
+
         plt.savefig("test.png")
-        exit()
 
     def atom_contribution_plot(
         self,
@@ -605,7 +635,6 @@ class NEXAFS:
 
             x, _ = self._plot(i, "./", "Total Spectrum", "black")
             plt.xticks(np.arange(min(x), max(x) + 1, 2))
-            # plt.ylabel("Normalised Intensity")
             plt.ylabel("Intensity")
             plt.xlabel("Energy (eV)")
             plt.tight_layout()
@@ -691,6 +720,7 @@ def main(
     get_i_atoms,
     atom_contribution_plot,
     multi_angle_plot,
+    force,
 ):
     nexafs = NEXAFS(
         n_procs,
@@ -717,40 +747,40 @@ def main(
     for t in theta:
         for p in phi:
             # Check if deltas files already exist
-            # if nexafs.check_prev_broadening(t, p):
-            #     print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
-            #     continue
+            if not force and nexafs.check_prev_broadening(t, p):
+                print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
+                continue
 
             nexafs.parse_sim_nexafs_data(t, p, get_i_atom=get_i_atoms)
-
-            nexafs.rigid_shift(2)
+            nexafs.rigid_shift(5)
 
             print(f"Broadening delta peaks for theta={t} phi={p}...")
             print("Broadening total spectrum...")
-            x, y = nexafs.broaden()
+            nexafs.broaden()
 
             nexafs.normalise()
-            nexafs.single_spectrum_plot()
-            exit()
 
             # Write out spectrum to a text file
             np.savetxt(
-                f"{molecule}_{surface}_spectrum_t{t}_p{p}.txt", np.vstack((x, y)).T
+                f"{molecule}_{surface}_spectrum_t{t}_p{p}.txt",
+                np.vstack((nexafs.domain, nexafs.broadened)).T,
             )
 
             if get_i_atoms:
                 print("Broadening individual atom spectra...")
 
                 for i in tqdm(range(len(nexafs.dirs))):
-                    x, y = nexafs.broaden()
+                    nexafs.broaden()
 
                     # Write out spectrum to a text file
                     np.savetxt(
                         f"{nexafs.dirs[i]}t{t}_p{p}/{molecule}_{surface}_spectrum_t{t}_p{p}.txt",
-                        np.vstack((x, y)).T,
+                        np.vstack((nexafs.domain, nexafs.broadened)).T,
                     )
 
                 print("Finished broadening individual atom spectra...")
+
+    nexafs.basic_plot("53", "60")
 
     # Plot individual atom contributions
     if atom_contribution_plot:
@@ -844,14 +874,19 @@ def main(
     help="type of spectrum to plot",
 )
 @click.option(
-    "-p", "--phi", default=["60"], type=list[str], show_default=True, help="phi angles"
+    "-p",
+    "--phi",
+    default=["60"],
+    show_default=True,
+    multiple=True,
+    help="phi angles",
 )
 @click.option(
     "-t",
     "--theta",
     default=["00", "25", "53", "90"],
-    type=list[str],
     show_default=True,
+    multiple=True,
     help="theta angles",
 )
 @click.option(
@@ -888,6 +923,13 @@ def main(
     show_default=True,
     help="plot the total spectrum for all angles",
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Broaden the spectra even if the delta peaks files exist",
+)
 def nexafs(
     n_procs,
     molecule,
@@ -909,6 +951,7 @@ def nexafs(
     get_i_atoms,
     atom_contribution_plot,
     multi_angle_plot,
+    force,
 ):
     """
     A tool for simulating NEXAFS spectra for surfaces from CASTEP calculations.
@@ -937,4 +980,5 @@ def nexafs(
         get_i_atoms,
         atom_contribution_plot,
         multi_angle_plot,
+        force,
     )
