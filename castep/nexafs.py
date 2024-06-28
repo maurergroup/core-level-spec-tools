@@ -675,9 +675,10 @@ def main(
     end,
     sim_initial_peak,
     exp_initial_peak,
-    root_dir,
+    root_dir_1,
+    root_dir_2,
+    dataset_mixing,
     experimental_data,
-    edge_atom_root,
     omega_1,
     omega_2,
     mix_1,
@@ -737,7 +738,7 @@ def main(
         theta,
         excited_nth_element,
         get_i_atoms,
-        root_dir=root_dir,
+        root_dir=root_dir_1,
     )
 
     edge_atom = NEXAFS(
@@ -759,7 +760,7 @@ def main(
         theta,
         excited_nth_element,
         get_i_atoms,
-        root_dir=edge_atom_root,
+        root_dir=root_dir_2,
     )
 
     # Get the experimental data and normalise
@@ -769,19 +770,21 @@ def main(
     # Plot spectrum for all theta and phi angles
     for t in theta:
         for p in phi:
+            # Parse the simulated data
             sw_sim.parse_simulated(t, p, get_i_atom=get_i_atoms)
             edge_atom.parse_simulated(t, p, get_i_atom=get_i_atoms)
 
+            # Mix the two datasets
             mix = copy(sw_sim)
             mix.separate_bands = np.append(
-                mix.separate_bands, edge_atom.total_bands * (16 * 5)
+                mix.separate_bands, edge_atom.separate_bands * dataset_mixing
             )
             mix.total_bands = mix.separate_bands.flatten()
             mix.separate_peaks = np.append(mix.separate_peaks, edge_atom.total_peaks)
             mix.total_peaks = mix.separate_peaks.flatten()
 
-            # print(f"Broadening delta peaks for theta={t} phi={p}...")
-            print(f"Broadening delta peaks for theta={theta[0]} phi={phi[0]}...")
+            # Broaden, normalise, and shift
+            print(f"Broadening delta peaks for theta={t} phi={p}...")
             print("Broadening total spectrum...")
             edge_atom.broaden()
             edge_atom.normalise()
@@ -885,26 +888,32 @@ def main(
     help="energy value of the experimental initial peak",
 )
 @click.option(
-    "-r",
-    "--root_dir",
+    "-r1",
+    "--root_dir_1",
     default="./",
     type=click.Path(exists=True, file_okay=False),
     show_default=True,
-    help="root directory of the data",
+    help="path to the root directory of the first dataset",
+)
+@click.option(
+    "-r2",
+    "--root_dir_2",
+    type=click.Path(exists=True, file_okay=False),
+    help="path to the root directory of the second dataset",
+)
+@click.option(
+    "-d",
+    "--dataset_mixing",
+    default=1.0,
+    type=float,
+    show_default=True,
+    help="factor by which to multiply the intensities of the second dataset",
 )
 @click.option(
     "-ed",
     "--experimental_data",
-    required=True,
     type=click.Path(exists=True, dir_okay=False),
     help="path to the experimental data to plot",
-)
-@click.option(
-    "-ar",
-    "--edge_atom_root",
-    required=True,
-    type=click.Path(exists=True, file_okay=False),
-    help="path to the edge atom root directory",
 )
 @click.option(
     "-o1",
@@ -1007,9 +1016,10 @@ def nexafs(
     index_end,
     simulated_initial_peak,
     experimental_initial_peak,
-    root_dir,
+    root_dir_1,
+    root_dir_2,
+    dataset_mixing,
     experimental_data,
-    edge_atom_root,
     omega_1,
     omega_2,
     mix_1,
@@ -1034,9 +1044,10 @@ def nexafs(
         end,
         simulated_initial_peak,
         experimental_initial_peak,
-        root_dir,
+        root_dir_1,
+        root_dir_2,
+        dataset_mixing,
         experimental_data,
-        edge_atom_root,
         omega_1,
         omega_2,
         mix_1,
