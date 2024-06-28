@@ -73,8 +73,8 @@ def multi_angle(deltas, cmap):
     plt.tight_layout()
     plt.legend()
 
-    plt.savefig(f"spectrum_angles.png")
-    print(f"Plotted angles")
+    plt.savefig("spectrum_angles.png")
+    print("Plotted angles")
 
 
 def compare(deltas):

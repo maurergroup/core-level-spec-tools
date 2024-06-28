@@ -1,4 +1,3 @@
-from ase.io import read
 
 def get_energy_level(line):
     for word in line.split():

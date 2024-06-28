@@ -1,5 +1,3 @@
-from typing import Final
-from ase.io import read
 from force_basis_get_XPS_energies import INITIAL
 
 def get_energy_level(line):

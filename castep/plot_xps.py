@@ -55,12 +55,12 @@ def main():
 
 def gaussian(X, X_MEAN, BROADENING):
     
-    GAUSSIAN_VAL = np.sqrt((4*np.log(2))/(np.pi*(BROADENING**2)))* np.exp(-((4*np.log(2))/(BROADENING**2))*(X-X_MEAN)**2);
+    GAUSSIAN_VAL = np.sqrt((4*np.log(2))/(np.pi*(BROADENING**2)))* np.exp(-((4*np.log(2))/(BROADENING**2))*(X-X_MEAN)**2)
     return GAUSSIAN_VAL
 
 def lorentzian(X, X_MEAN, BROADENING):
 
-    LORENTZIAN_VAL = (1/(2*np.pi))* (BROADENING)/(((BROADENING/2)**2)+(X-X_MEAN)**2);
+    LORENTZIAN_VAL = (1/(2*np.pi))* (BROADENING)/(((BROADENING/2)**2)+(X-X_MEAN)**2)
     return LORENTZIAN_VAL
 
 def PseudoVoigt(X, X_MEAN, BROADENING, MIXING):
