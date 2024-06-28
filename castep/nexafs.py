@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+from copy import copy
 from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
 from typing import Annotated, Literal
 
 import click
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
@@ -113,7 +113,6 @@ class NEXAFS:
         # Details about the chemical system
         self.molecule = molecule
         self.metal = surface
-        self.element = excited_atom
 
         # Index range of the atom directories created by autoscript.py
         # self.start_atom = index_start
@@ -139,27 +138,31 @@ class NEXAFS:
         # Create a list of all the atoms
         atom_ids = list(range(start_atom, end_atom + 1))
 
-        # Set up a list of all the directories all the data is in C48/, C49/... C57/
+        # Set up a list of all the directories all the data is in
         self.root_dir = root_dir
         self.dirs = np.array([])
         for n in atom_ids:
-            direc = f"{self.root_dir}/{self.element}{str(n)}/"
+            direc = f"{self.root_dir}/{excited_atom}{str(n)}/"
             if os.path.isdir(direc):
                 self.dirs = np.append(self.dirs, direc)
 
-        # Deltas file for each molpdos run
-        self.fname = f"/{self.molecule}_{self.metal}_{self.atom}_1_1_1_deltas.dat"
+        # Don't attempt to parse if not foound ie. for experimental data
+        if len(self.dirs) > 0:
+            # Deltas file for each molpdos run
+            self.fname = f"{self.molecule}_{self.metal}_{self.atom}_1_1_1_deltas.dat"
 
-        # Get the length of the deltas file
-        num_peaks = len(
-            np.loadtxt(
-                f"{self.element}{str(atom_ids[0])}/t{theta[0]}_p{phi[0]}{self.fname}"
+            # Get the length of the deltas file
+            num_peaks = len(
+                np.loadtxt(f"{self.dirs[0]}/t{theta[0]}_p{phi[0]}/{self.fname}")
             )
-        )
 
-        # Create arrays with sizes of the system to use
-        self.separate_peaks = np.zeros([len(atom_ids), num_peaks])
-        self.separate_bands = np.zeros([len(atom_ids), num_peaks])
+            # Create arrays with sizes of the system to use
+            self.separate_peaks = np.zeros([len(self.dirs), num_peaks])
+            self.separate_bands = np.zeros([len(self.dirs), num_peaks])
+
+        else:
+            self.separate_peaks = None
+            self.separate_bands = None
 
         self.total_peaks = None
         self.total_bands = None
@@ -249,21 +252,6 @@ class NEXAFS:
                 np.argmax(np.asarray(self.total_peaks < self.ewid_1).nonzero())
             ]
 
-    def check_prev_broadening(self, theta: str, phi: str) -> bool:
-        """
-        Check if broadened deltas files already exist.
-
-        Returns
-        -------
-        bool
-            whether the broadened deltas files already exist
-        """
-
-        if os.path.isfile(f"{self.molecule}_{self.metal}_deltas_t{theta}_p{phi}.txt"):
-            return True
-        else:
-            return False
-
     def parse_experimental(self, file_name: str) -> None:
         """
         Parse the experimental NEXAFS data
@@ -279,7 +267,6 @@ class NEXAFS:
 
         self.broadened = True
 
-        "/Users/dylanmorgan/comp_chem/warwick/xray_spec/exp/NEXAFS_exp_graphene.txt"
         self.total_peaks, self.total_bands = np.loadtxt(
             f"{self.root_dir}/{file_name}", unpack=True
         )
@@ -301,7 +288,7 @@ class NEXAFS:
         print(f"Parsing NEXAFS data for theta={theta} phi={phi}...")
         for i in range(len(self.dirs)):
             nexafs = np.loadtxt(
-                f"{self.dirs[i]}t{theta}_p{phi}{self.fname}",
+                f"{self.dirs[i]}t{theta}_p{phi}/{self.fname}",
                 skiprows=1,
                 unpack=True,
             )
@@ -322,20 +309,20 @@ class NEXAFS:
         self.total_bands = self.separate_bands.flatten()
 
         # Write out all of the data into a delta peaks file
-        # np.savetxt(
-        #     f"{self.molecule}_{self.metal}_deltas_t{theta}_p{phi}.txt",
-        #     np.vstack((self.total_peaks, self.total_bands)).T,
-        #     header="# <x in eV> Intensity",
-        # )
+        np.savetxt(
+            f"{self.root_dir}/{self.molecule}_{self.metal}_deltas_t{theta}_p{phi}.txt",
+            np.vstack((self.total_peaks, self.total_bands)).T,
+            header="# <x in eV> Intensity",
+        )
 
-        # print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
+        print(f"Finished writing out delta peaks file for theta={theta} phi={phi}")
 
     @staticmethod
     def _schmid_pseudo_voigt(
         domain: npt.NDArray[np.float64],
-        m: float,
+        m: npt.NDArray[np.float64],
         E: float,
-        omega: Annotated[float, GreaterThan(0)],
+        omega: npt.NDArray[Annotated[np.float64, GreaterThan(0)]],
     ) -> npt.NDArray[np.float64]:
         """
         Apply broadening scheme for XPS spectra. See the following reference for more details:
@@ -345,11 +332,11 @@ class NEXAFS:
         ----------
         domain : npt.NDArray[np.float64]
             range of x-values to include in the spectrum
-        m : float
+        m : npt.NDArray[np.float64]
             Gaussian-Lorentzian mixing parameter
         E : float
             line centre/delta peak
-        omega : Annotated[float, GreaterThan(0)]
+        omega : npt.NDArray[Annnotated[np.float64, GreaterThan(0)]
             full width at half maximum (omega > 0)
 
         Returns
@@ -365,9 +352,9 @@ class NEXAFS:
     @staticmethod
     def _mp_broaden(
         domain: npt.NDArray[np.float64],
-        mixing: float,
+        mixing: npt.NDArray[np.float64],
         delta_peak: float,
-        sigma: float,
+        sigma: npt.NDArray[np.float64],
         coeffs: npt.NDArray[np.float64],
     ) -> np.float64:
         """
@@ -377,11 +364,11 @@ class NEXAFS:
         ----------
         domain : npt.NDArray[np.float64]
             range of x-values to include in the spectrum
-        mixing : float
+        mixing : npt.NDArray[np.float64]
             Gaussian-Lorentzian mixing parameter
         delta_peak : float
             line centre/delta peak
-        sigma : float
+        sigma : npt.NDArray[np.float64]
             linearly interpolated full width at half maximum
         coeffs : npt.NDArray[np.float64]
             Delta peak intensities
@@ -402,9 +389,9 @@ class NEXAFS:
     def _sp_broaden(
         data: npt.NDArray[np.float64],
         domain: npt.NDArray[np.float64],
-        mixing: float,
+        mixing: npt.NDArray[np.float64],
         delta_peak: float,
-        sigma: float,
+        sigma: npt.NDArray[np.float64],
         coeffs: npt.NDArray[np.float64],
     ) -> npt.NDArray[np.float64]:
         """
@@ -416,11 +403,11 @@ class NEXAFS:
             non-broadened spectrum
         domain : npt.NDArray[np.float64]
             range of x-values to include in the spectrum
-        mixing : float
+        mixing : npt.NDArray[np.float64]
             Gaussian-Lorentzian mixing parameter
         delta_peak : float
             line centre/delta peak
-        sigma : float
+        sigma : npt.NDArray[np.float64]
             linearly interpolated full width at half maximum
         coeffs : npt.NDArray[np.float64]
             Delta peak intensities
@@ -533,7 +520,8 @@ class NEXAFS:
     def normalise(self) -> None:
         """Normalise the broadened spectrum so the k-edge has an intensity of 1"""
 
-        self.separate_bands /= self.k_edge_max
+        if self.separate_bands is not None:
+            self.separate_bands /= self.k_edge_max
 
         if self.total_bands is not None:
             self.total_bands /= self.k_edge_max
@@ -687,6 +675,9 @@ def main(
     end,
     sim_initial_peak,
     exp_initial_peak,
+    root_dir,
+    experimental_data,
+    edge_atom_root,
     omega_1,
     omega_2,
     mix_1,
@@ -703,7 +694,6 @@ def main(
     get_i_atoms,
     atom_contribution_plot,
     multi_angle_plot,
-    force,
 ):
 
     exp = NEXAFS(
@@ -725,7 +715,7 @@ def main(
         theta,
         excited_nth_element,
         get_i_atoms,
-        root_dir="/Users/dylanmorgan/comp_chem/warwick/xray_spec/exp/",
+        root_dir="/".join(experimental_data.split("/")[:-1]),
     )
 
     sw_sim = NEXAFS(
@@ -747,6 +737,7 @@ def main(
         theta,
         excited_nth_element,
         get_i_atoms,
+        root_dir=root_dir,
     )
 
     edge_atom = NEXAFS(
@@ -768,37 +759,39 @@ def main(
         theta,
         excited_nth_element,
         get_i_atoms,
-        root_dir="/Users/dylanmorgan/comp_chem/warwick/xray_spec/SW_edge_atom/NEXAFS/",
+        root_dir=edge_atom_root,
     )
 
     # Get the experimental data and normalise
-    exp.parse_experimental("NEXAFS_exp_graphene.txt")
+    exp.parse_experimental(experimental_data.split("/")[-1])
     exp.normalise()
 
     # Plot spectrum for all theta and phi angles
-    # for t in theta:
-    #     for p in phi:
-    # Check if deltas files already exist
-    # if not force and sw_sim.check_prev_broadening(t, p):
-    #     print(f"Delta peaks file for theta={t} phi={p} found, skipping...")
-    #     continue
+    for t in theta:
+        for p in phi:
+            sw_sim.parse_simulated(t, p, get_i_atom=get_i_atoms)
+            edge_atom.parse_simulated(t, p, get_i_atom=get_i_atoms)
 
-    # sw_sim.parse_simulated(t, p, get_i_atom=get_i_atoms)
-    sw_sim.parse_simulated(theta[0], phi[0], get_i_atom=get_i_atoms)
+            mix = copy(sw_sim)
+            mix.separate_bands = np.append(
+                mix.separate_bands, edge_atom.total_bands * (16 * 5)
+            )
+            mix.total_bands = mix.separate_bands.flatten()
+            mix.separate_peaks = np.append(mix.separate_peaks, edge_atom.total_peaks)
+            mix.total_peaks = mix.separate_peaks.flatten()
 
-    edge_atom.parse_simulated(theta[0], phi[0], get_i_atom=get_i_atoms),
-
-    for i in range(len(sw_sim.total_peaks)):
-        print(sw_sim.total_bands[i])
-        print(edge_atom.total_bands[i])
-
-    exit()
-
-    # print(f"Broadening delta peaks for theta={t} phi={p}...")
-    # print("Broadening total spectrum...")
-    sw_sim.broaden()
-    sw_sim.normalise()
-    sw_sim.rigid_shift(sw_sim.energy_k_edge_max - exp.energy_k_edge_max)
+            # print(f"Broadening delta peaks for theta={t} phi={p}...")
+            print(f"Broadening delta peaks for theta={theta[0]} phi={phi[0]}...")
+            print("Broadening total spectrum...")
+            edge_atom.broaden()
+            edge_atom.normalise()
+            edge_atom.rigid_shift(edge_atom.energy_k_edge_max - exp.energy_k_edge_max)
+            mix.broaden()
+            mix.normalise()
+            mix.rigid_shift(mix.energy_k_edge_max - exp.energy_k_edge_max)
+            sw_sim.broaden()
+            sw_sim.normalise()
+            sw_sim.rigid_shift(sw_sim.energy_k_edge_max - exp.energy_k_edge_max)
 
     if get_i_atoms:
         raise NotImplementedError
@@ -815,10 +808,15 @@ def main(
 
         # print("Finished broadening individual atom spectra...")
 
-    plt.plot(sw_sim.total_peaks, sw_sim.total_bands)
-    plt.plot(exp.total_peaks, exp.total_bands)
+    plt.plot(sw_sim.total_peaks, sw_sim.total_bands, "--", label="Defect Atoms")
+    plt.plot(edge_atom.total_peaks, edge_atom.total_bands, "--", label="Edge Atom")
+    plt.plot(exp.total_peaks, exp.total_bands, label="Experiment")
+    plt.plot(mix.total_peaks, mix.total_bands, label="Mixed")
     plt.xlim(min(sw_sim.total_peaks), max(sw_sim.total_peaks))
-    plt.savefig("test.png")
+    plt.xlabel("Energy / eV")
+    plt.ylabel("Normalised Intensity")
+    plt.legend()
+    plt.savefig("broadened.png")
 
     # Plot individual atom contributions
     if atom_contribution_plot:
@@ -885,6 +883,28 @@ def main(
     "--experimental_initial_peak",
     type=float,
     help="energy value of the experimental initial peak",
+)
+@click.option(
+    "-r",
+    "--root_dir",
+    default="./",
+    type=click.Path(exists=True, file_okay=False),
+    show_default=True,
+    help="root directory of the data",
+)
+@click.option(
+    "-ed",
+    "--experimental_data",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="path to the experimental data to plot",
+)
+@click.option(
+    "-ar",
+    "--edge_atom_root",
+    required=True,
+    type=click.Path(exists=True, file_okay=False),
+    help="path to the edge atom root directory",
 )
 @click.option(
     "-o1",
@@ -976,13 +996,6 @@ def main(
     show_default=True,
     help="plot the total spectrum for all angles",
 )
-@click.option(
-    "--force",
-    is_flag=True,
-    default=False,
-    show_default=True,
-    help="Broaden the spectra even if the delta peaks files exist",
-)
 def nexafs(
     n_procs,
     molecule,
@@ -994,6 +1007,9 @@ def nexafs(
     index_end,
     simulated_initial_peak,
     experimental_initial_peak,
+    root_dir,
+    experimental_data,
+    edge_atom_root,
     omega_1,
     omega_2,
     mix_1,
@@ -1005,7 +1021,6 @@ def nexafs(
     get_i_atoms,
     atom_contribution_plot,
     multi_angle_plot,
-    force,
 ):
     """
     A tool for simulating NEXAFS spectra for surfaces from CASTEP calculations.
@@ -1019,6 +1034,9 @@ def nexafs(
         end,
         simulated_initial_peak,
         experimental_initial_peak,
+        root_dir,
+        experimental_data,
+        edge_atom_root,
         omega_1,
         omega_2,
         mix_1,
@@ -1035,5 +1053,4 @@ def nexafs(
         get_i_atoms,
         atom_contribution_plot,
         multi_angle_plot,
-        force,
     )
